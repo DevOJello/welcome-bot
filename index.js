@@ -4,11 +4,9 @@ const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord
 require('dotenv').config();
 const express = require('express');
 const app = express();
-
 app.get('/', (req, res) => res.send('Welcome Bot online'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
-
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -16,15 +14,11 @@ const client = new Client({
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.GuildMessages,
   ],
-  partials: ['MESSAGE', 'CHANNEL', 'REACTION'], // needed for reactions on old messages
+  partials: ['MESSAGE', 'CHANNEL', 'REACTION'],
 });
-
 client.commands = new Collection();
-
-// Load slash commands
 const commandsPath = path.join(__dirname, 'commands');
 if (!fs.existsSync(commandsPath)) fs.mkdirSync(commandsPath);
-
 for (const file of fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'))) {
   const command = require(path.join(commandsPath, file));
   if (command.data && typeof command.data.toJSON === 'function') {
@@ -32,11 +26,8 @@ for (const file of fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'))) 
     console.log(`✔ Loaded: ${command.data.name}`);
   }
 }
-
-// Load events
 const eventsPath = path.join(__dirname, 'events');
 if (!fs.existsSync(eventsPath)) fs.mkdirSync(eventsPath);
-
 for (const file of fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'))) {
   const event = require(path.join(eventsPath, file));
   if (event.once) {
@@ -45,16 +36,12 @@ for (const file of fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'))) {
     client.on(event.name, (...args) => event.execute(...args, client));
   }
 }
-
 const rest = new REST({ version: '10' }).setToken(process.env.WELCOME_TOKEN);
-
 client.once('clientReady', async () => {
   console.log(`👋 Welcome Bot logged in as ${client.user.tag}`);
-
   try {
     const commandsJSON = Array.from(client.commands.values()).map(cmd => cmd.data.toJSON());
     if (!process.env.WELCOME_CLIENT_ID) return console.warn('WELCOME_CLIENT_ID not set');
-
     await rest.put(
       Routes.applicationCommands(process.env.WELCOME_CLIENT_ID),
       { body: commandsJSON }
@@ -64,13 +51,24 @@ client.once('clientReady', async () => {
     console.error('Failed to deploy commands:', err);
   }
 });
-
 client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+  // Handle button interactions
+  if (interaction.isButton()) {
+    for (const command of client.commands.values()) {
+      if (typeof command.handleButton === 'function') {
+        try {
+          await command.handleButton(interaction, client);
+        } catch (err) {
+          console.error('Button handler error:', err);
+        }
+      }
+    }
+    return;
+  }
 
+  if (!interaction.isChatInputCommand()) return;
   const command = client.commands.get(interaction.commandName);
   if (!command) return;
-
   try {
     await command.execute(interaction, client);
   } catch (error) {
@@ -84,5 +82,4 @@ client.on('interactionCreate', async (interaction) => {
     } catch {}
   }
 });
-
 client.login(process.env.WELCOME_TOKEN);
