@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, ChannelType, AttachmentBuilder } = require('discord.js');
 const pool = require('../database');
 
 async function initDB() {
@@ -33,9 +33,56 @@ async function generateTranscript(channel) {
   const messages = await channel.messages.fetch({ limit: 100 });
   const sorted = [...messages.values()].reverse();
   const lines = sorted.map(m =>
-    `[${m.createdAt.toISOString()}] ${m.author.username}: ${m.content || '[attachment/embed]'}`
+    `[${m.createdAt.toISOString()}] ${m.author.tag}: ${m.content || '[attachment/embed]'}`
   ).join('\n');
   return lines || 'No messages found.';
+}
+
+async function closeTicket(interaction, channelId, channel, guild) {
+  const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id = $1 AND status = 'open'`, [channelId]);
+  if (rows.length === 0) return interaction.reply({ content: '⚠️ This ticket is already closed.', flags: 64 });
+
+  const ticket = rows[0];
+  const config = await getConfig(guild.id);
+
+  await interaction.reply({
+    embeds: [new EmbedBuilder()
+      .setColor(0xff4444)
+      .setDescription('🔒 Closing ticket and saving transcript...')
+    ]
+  });
+
+  // Save transcript
+  if (config?.transcript_channel_id) {
+    try {
+      const transcript = await generateTranscript(channel);
+      const transcriptChannel = guild.channels.cache.get(config.transcript_channel_id);
+      if (transcriptChannel) {
+        const buffer = Buffer.from(transcript, 'utf8');
+        const attachment = new AttachmentBuilder(buffer, { name: `ticket-${channelId}.txt` });
+        await transcriptChannel.send({
+          embeds: [new EmbedBuilder()
+            .setTitle('📋 Ticket Transcript')
+            .setColor(0x5865f2)
+            .addFields(
+              { name: '👤 Opened by', value: `<@${ticket.user_id}>`, inline: true },
+              { name: '🔒 Closed by', value: `<@${interaction.user.id}>`, inline: true },
+              { name: '📅 Date', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+            )
+            .setTimestamp()],
+          files: [attachment]
+        });
+      }
+    } catch (err) {
+      console.error('Failed to save transcript:', err.message);
+    }
+  }
+
+  await pool.query(`UPDATE tickets SET status = 'closed' WHERE channel_id = $1`, [channelId]);
+
+  setTimeout(async () => {
+    try { await channel.delete(); } catch {}
+  }, 5000);
 }
 
 module.exports = {
@@ -92,10 +139,7 @@ module.exports = {
         INSERT INTO ticket_config (guild_id, staff_role_id, transcript_channel_id, category_id)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (guild_id) DO UPDATE SET
-          staff_role_id = $2,
-          transcript_channel_id = $3,
-          category_id = $4,
-          updated_at = NOW()
+          staff_role_id = $2, transcript_channel_id = $3, category_id = $4, updated_at = NOW()
       `, [guild.id, staffRole.id, transcriptChannel.id, category?.id || null]);
 
       return interaction.reply({
@@ -105,7 +149,7 @@ module.exports = {
           .addFields(
             { name: '👥 Staff Role', value: `<@&${staffRole.id}>`, inline: true },
             { name: '📋 Transcript Channel', value: `<#${transcriptChannel.id}>`, inline: true },
-            { name: '📁 Category', value: category ? `${category.name}` : 'None (will use default)', inline: true },
+            { name: '📁 Category', value: category ? category.name : 'Default', inline: true },
           )]
       });
     }
@@ -116,12 +160,13 @@ module.exports = {
       if (!config) return interaction.reply({ content: '⚠️ Set up the ticket system first with `/ticket setup`.', flags: 64 });
 
       const channel = interaction.options.getChannel('channel');
-      const message = interaction.options.getString('message') || 'Click the button below to open a support ticket.';
+      const message = interaction.options.getString('message') || 'Need help? Click the button below to open a support ticket and our team will assist you as soon as possible.';
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`ticket_create_${guild.id}`)
-          .setLabel('🎫 Open Ticket')
+          .setLabel('Open a Ticket')
+          .setEmoji('🎫')
           .setStyle(ButtonStyle.Primary)
       );
 
@@ -129,7 +174,8 @@ module.exports = {
         embeds: [new EmbedBuilder()
           .setTitle('🎫 Support Tickets')
           .setColor(0x5865f2)
-          .setDescription(message)],
+          .setDescription(message)
+          .setFooter({ text: 'One ticket per person • Misuse may result in a ban' })],
         components: [row]
       });
 
@@ -138,67 +184,33 @@ module.exports = {
 
     // ── CLOSE ─────────────────────────────────────────────────────────────────
     if (sub === 'close') {
-      const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id = $1 AND status = 'open'`, [interaction.channelId]);
-      if (rows.length === 0) return interaction.reply({ content: '⚠️ This is not an active ticket channel.', flags: 64 });
-
-      const ticket = rows[0];
-      const config = await getConfig(guild.id);
-
-      await interaction.reply({ content: '🔒 Closing ticket and saving transcript...' });
-
-      // Save transcript
-      if (config?.transcript_channel_id) {
-        try {
-          const transcript = await generateTranscript(interaction.channel);
-          const transcriptChannel = guild.channels.cache.get(config.transcript_channel_id);
-          if (transcriptChannel) {
-            const { AttachmentBuilder } = require('discord.js');
-            const buffer = Buffer.from(transcript, 'utf8');
-            const attachment = new AttachmentBuilder(buffer, { name: `ticket-${interaction.channelId}.txt` });
-            await transcriptChannel.send({
-              embeds: [new EmbedBuilder()
-                .setTitle('📋 Ticket Transcript')
-                .setColor(0x5865f2)
-                .setDescription(`Ticket by <@${ticket.user_id}> closed by <@${interaction.user.id}>`)
-                .setTimestamp()],
-              files: [attachment]
-            });
-          }
-        } catch (err) {
-          console.error('Failed to save transcript:', err.message);
-        }
-      }
-
-      await pool.query(`UPDATE tickets SET status = 'closed' WHERE channel_id = $1`, [interaction.channelId]);
-
-      // Delete channel after 5 seconds
-      setTimeout(async () => {
-        try {
-          await interaction.channel.delete();
-        } catch (err) {
-          console.error('Failed to delete ticket channel:', err.message);
-        }
-      }, 5000);
+      await closeTicket(interaction, interaction.channelId, interaction.channel, guild);
     }
 
     // ── ADD ───────────────────────────────────────────────────────────────────
     if (sub === 'add') {
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id = $1 AND status = 'open'`, [interaction.channelId]);
       if (rows.length === 0) return interaction.reply({ content: '⚠️ This is not an active ticket channel.', flags: 64 });
-
       const user = interaction.options.getUser('user');
-      await interaction.channel.permissionOverwrites.edit(user.id, { ViewChannel: true, SendMessages: true });
-      return interaction.reply({ content: `✅ <@${user.id}> has been added to this ticket.` });
+      await interaction.channel.permissionOverwrites.edit(user.id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true });
+      return interaction.reply({
+        embeds: [new EmbedBuilder()
+          .setColor(0x00cc66)
+          .setDescription(`✅ <@${user.id}> has been added to this ticket.`)]
+      });
     }
 
     // ── REMOVE ────────────────────────────────────────────────────────────────
     if (sub === 'remove') {
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id = $1 AND status = 'open'`, [interaction.channelId]);
       if (rows.length === 0) return interaction.reply({ content: '⚠️ This is not an active ticket channel.', flags: 64 });
-
       const user = interaction.options.getUser('user');
       await interaction.channel.permissionOverwrites.edit(user.id, { ViewChannel: false });
-      return interaction.reply({ content: `✅ <@${user.id}> has been removed from this ticket.` });
+      return interaction.reply({
+        embeds: [new EmbedBuilder()
+          .setColor(0xff4444)
+          .setDescription(`✅ <@${user.id}> has been removed from this ticket.`)]
+      });
     }
   },
 
@@ -208,47 +220,7 @@ module.exports = {
     // ── CLOSE BUTTON ─────────────────────────────────────────────────────────
     if (interaction.customId.startsWith('ticket_close_')) {
       const channelId = interaction.customId.replace('ticket_close_', '');
-      const guild = interaction.guild;
-
-      const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id = $1 AND status = 'open'`, [channelId]);
-      if (rows.length === 0) return interaction.reply({ content: '⚠️ This ticket is already closed.', flags: 64 });
-
-      const ticket = rows[0];
-      const config = await getConfig(guild.id);
-
-      await interaction.reply({ content: '🔒 Closing ticket and saving transcript...' });
-
-      if (config?.transcript_channel_id) {
-        try {
-          const transcript = await generateTranscript(interaction.channel);
-          const transcriptChannel = guild.channels.cache.get(config.transcript_channel_id);
-          if (transcriptChannel) {
-            const { AttachmentBuilder } = require('discord.js');
-            const buffer = Buffer.from(transcript, 'utf8');
-            const attachment = new AttachmentBuilder(buffer, { name: `ticket-${channelId}.txt` });
-            await transcriptChannel.send({
-              embeds: [new EmbedBuilder()
-                .setTitle('📋 Ticket Transcript')
-                .setColor(0x5865f2)
-                .setDescription(`Ticket by <@${ticket.user_id}> closed by <@${interaction.user.id}>`)
-                .setTimestamp()],
-              files: [attachment]
-            });
-          }
-        } catch (err) {
-          console.error('Failed to save transcript:', err.message);
-        }
-      }
-
-      await pool.query(`UPDATE tickets SET status = 'closed' WHERE channel_id = $1`, [channelId]);
-
-      setTimeout(async () => {
-        try {
-          await interaction.channel.delete();
-        } catch (err) {
-          console.error('Failed to delete ticket channel:', err.message);
-        }
-      }, 5000);
+      await closeTicket(interaction, channelId, interaction.channel, interaction.guild);
       return;
     }
 
@@ -262,7 +234,6 @@ module.exports = {
     const config = await getConfig(guildId);
     if (!config) return interaction.reply({ content: '⚠️ Ticket system not configured.', flags: 64 });
 
-    // Check if user already has an open ticket
     const { rows: existing } = await pool.query(`
       SELECT * FROM tickets WHERE guild_id = $1 AND user_id = $2 AND status = 'open'
     `, [guildId, user.id]);
@@ -274,20 +245,20 @@ module.exports = {
       });
     }
 
-    // Create ticket channel
     const channelOptions = {
-      name: `ticket-${user.username.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+      name: `🎫・${user.username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20)}`,
       type: ChannelType.GuildText,
+      topic: `Ticket opened by ${user.tag}`,
       permissionOverwrites: [
         { id: guild.id, deny: ['ViewChannel'] },
-        { id: user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] },
+        { id: user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles'] },
       ]
     };
 
     if (config.staff_role_id) {
       channelOptions.permissionOverwrites.push({
         id: config.staff_role_id,
-        allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages']
+        allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages', 'AttachFiles']
       });
     }
 
@@ -301,24 +272,28 @@ module.exports = {
       return interaction.reply({ content: '❌ Failed to create ticket channel. Check my permissions.', flags: 64 });
     }
 
-    await pool.query(`
-      INSERT INTO tickets (guild_id, channel_id, user_id) VALUES ($1, $2, $3)
-    `, [guildId, ticketChannel.id, user.id]);
+    await pool.query(`INSERT INTO tickets (guild_id, channel_id, user_id) VALUES ($1, $2, $3)`, [guildId, ticketChannel.id, user.id]);
 
     const closeRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`ticket_close_${ticketChannel.id}`)
-        .setLabel('🔒 Close Ticket')
+        .setLabel('Close Ticket')
+        .setEmoji('🔒')
         .setStyle(ButtonStyle.Danger)
     );
 
     await ticketChannel.send({
       content: `<@${user.id}>${config.staff_role_id ? ` <@&${config.staff_role_id}>` : ''}`,
       embeds: [new EmbedBuilder()
-        .setTitle('🎫 New Ticket')
+        .setTitle('🎫 Support Ticket')
         .setColor(0x5865f2)
-        .setDescription(`Welcome <@${user.id}>! Support will be with you shortly.\n\nDescribe your issue below.`)
-        .setTimestamp()],
+        .setDescription(`Hey <@${user.id}>, welcome to your ticket!\n\nPlease describe your issue in as much detail as possible and our team will assist you shortly.`)
+        .addFields(
+          { name: '👤 Opened by', value: `<@${user.id}>`, inline: true },
+          { name: '📅 Opened at', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+        )
+        .setThumbnail(user.displayAvatarURL({ extension: 'png', size: 256 }))
+        .setFooter({ text: 'Click the button below to close this ticket' })],
       components: [closeRow]
     });
 
