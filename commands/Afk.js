@@ -16,8 +16,6 @@ module.exports = {
   async execute(interaction, client) {
     const reason = interaction.options.getString('reason') || 'AFK';
     const member = interaction.member;
-
-    // Save original nickname
     const originalNick = member.nickname || member.user.username;
 
     afkUsers.set(interaction.user.id, {
@@ -27,13 +25,10 @@ module.exports = {
       originalNick,
     });
 
-    // Try to update nickname
     try {
       const newNick = `[AFK] ${originalNick}`.slice(0, 32);
       await member.setNickname(newNick);
-    } catch {
-      // Bot may not have permission to change nickname (e.g. server owner)
-    }
+    } catch {}
 
     return interaction.reply({
       embeds: [new EmbedBuilder()
@@ -42,6 +37,5 @@ module.exports = {
     });
   },
 
-  // Called from the messageCreate event
   afkUsers,
 };
