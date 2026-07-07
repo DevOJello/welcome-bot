@@ -1,15 +1,13 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
-    name: 'setup-verify',
-    description: 'Sets up the verification message in the current channel.',
-    async execute(message, args) {
-        // Only administrators can run this command
-        if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return message.reply('You do not have permission to use this command!');
-        }
+    data: new SlashCommandBuilder()
+        .setName('setup-verify')
+        .setDescription('Sets up the verification message in the current channel.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator), // Restricts this command to Administrators only
 
-        // Create the embed
+    async execute(interaction) {
+        // Create the verification embed
         const embed = new EmbedBuilder()
             .setTitle('Server Verification')
             .setDescription('Welcome to the server! Click the green button below to verify yourself and gain access to the rest of the channels.')
@@ -18,13 +16,18 @@ module.exports = {
         // Create the button
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId('verify_button') // Used to detect the click in the event file
+                .setCustomId('verify_button') // Handled in your interaction handler
                 .setLabel('Verify Me!')
-                .setStyle(ButtonStyle.Success)
+                .setStyle(ButtonStyle.Success) // Green button
         );
 
-        // Send the message and delete the admin's trigger message
-        await message.channel.send({ embeds: [embed], components: [row] });
-        await message.delete().catch(console.error);
+        // Send the verification message cleanly into the channel
+        await interaction.channel.send({ embeds: [embed], components: [row] });
+
+        // Reply to the admin ephemerally so the slash command registers as successful
+        await interaction.reply({
+            content: 'Verification message deployed successfully!',
+            ephemeral: true
+        });
     },
 };
