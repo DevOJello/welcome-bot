@@ -3,30 +3,33 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('setup-verify')
-        .setDescription('Sets up the verification message in the current channel.')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator), // Restricts this command to Administrators only
+        .setDescription('Sets up the verification message in this channel.')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interaction) {
-        // Create the verification embed
+        // Upgraded verification embed
         const embed = new EmbedBuilder()
-            .setTitle('Server Verification')
-            .setDescription('Welcome to the server! Click the green button below to verify yourself and gain access to the rest of the channels.')
-            .setColor(0x2ecc71); // Green color
+            .setTitle('🛡️ Server Verification')
+            .setDescription(`Welcome to **${interaction.guild.name}**! \n\nTo keep the server safe and gain access to all the channels, please take a moment to verify yourself.\n\n**What do you need to do?**\nSimply click the green button below to get instant access. Enjoy your stay!`)
+            .setColor(0x5865F2) // Discord Blurple color
+            .setFooter({ text: 'Verification System', iconURL: interaction.guild.iconURL({ dynamic: true }) })
+            .setTimestamp();
 
-        // Create the button
+        // Button with an icon
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId('verify_button') // Handled in your interaction handler
+                .setCustomId('verify_button')
                 .setLabel('Verify Me!')
-                .setStyle(ButtonStyle.Success) // Green button
+                .setEmoji('✅')
+                .setStyle(ButtonStyle.Success)
         );
 
-        // Send the verification message cleanly into the channel
+        // Send the message into the channel
         await interaction.channel.send({ embeds: [embed], components: [row] });
 
-        // Reply to the admin ephemerally so the slash command registers as successful
+        // Admin confirmation (invisible to others)
         await interaction.reply({
-            content: 'Verification message deployed successfully!',
+            content: '✅ The verification message has been successfully deployed!',
             ephemeral: true
         });
     },
