@@ -1,42 +1,49 @@
+const { EmbedBuilder } = require('discord.js');
+
 const VERIFIED_ROLE_ID = '1523972825025745066'; 
 
 module.exports = {
     name: 'interactionCreate',
     async execute(interaction) {
-        // Check if the interaction is a button click
         if (!interaction.isButton()) return;
 
-        // Check if it's our verification button
         if (interaction.customId === 'verify_button') {
             const role = interaction.guild.roles.cache.get(VERIFIED_ROLE_ID);
 
-            // If the role doesn't exist in the server
             if (!role) {
                 return interaction.reply({
-                    content: 'Error: The verification role could not be found. Please contact an administrator.',
-                    ephemeral: true // Only visible to the user who clicked
+                    content: '❌ **Error:** The verification role could not be found. Please contact an administrator.',
+                    ephemeral: true 
                 });
             }
 
-            // Check if the member already has the role
+            // Check if the user already has the role
             if (interaction.member.roles.cache.has(VERIFIED_ROLE_ID)) {
                 return interaction.reply({
-                    content: 'You are already verified!',
+                    content: 'You are already verified! You can already access the full server. 🎉',
                     ephemeral: true
                 });
             }
 
-            // Add the role to the member
             try {
+                // Add the role
                 await interaction.member.roles.add(role);
+
+                // Sleek success embed
+                const successEmbed = new EmbedBuilder()
+                    .setTitle('✅ Verification Successful!')
+                    .setDescription('You now have full access to the server. Have fun!')
+                    .setColor(0x2ecc71); // Green for success
+
                 await interaction.reply({
-                    content: 'You have been successfully verified! Enjoy your stay in the server. 🎉',
+                    embeds: [successEmbed],
                     ephemeral: true
                 });
+
             } catch (error) {
                 console.error('Error while adding verification role:', error);
                 await interaction.reply({
-                    content: 'Something went wrong while assigning the role. Does the bot have the correct permissions/hierarchy?',
+                    content: '⚠️ **Something went wrong!** The bot could not assign the role. Please ensure the bot\'s role is positioned *above* the verification role in the server settings.',
                     ephemeral: true
                 });
             }
