@@ -3,33 +3,32 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('setup-verify')
-        .setDescription('Sets up the verification message in this channel.')
+        .setDescription('Sets up the advanced verification message in this channel.')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interaction) {
-        // Upgraded verification embed
+        // Premium looking embed with a thumbnail
         const embed = new EmbedBuilder()
             .setTitle('🛡️ Server Verification')
-            .setDescription(`Welcome to **${interaction.guild.name}**! \n\nTo keep the server safe and gain access to all the channels, please take a moment to verify yourself.\n\n**What do you need to do?**\nSimply click the green button below to get instant access. Enjoy your stay!`)
-            .setColor(0x5865F2) // Discord Blurple color
-            .setFooter({ text: 'Verification System', iconURL: interaction.guild.iconURL({ dynamic: true }) })
+            .setDescription(`Welcome to **${interaction.guild.name}**!\n\nTo ensure a safe community and prevent bots, we require all members to verify themselves.\n\n**Instructions:**\nClick the green **Verify Me!** button below to unlock all channels and start chatting.`)
+            .setColor(0x2B2D31) // A sleek, dark invisible color that blends into Discord's dark mode
+            .setThumbnail(interaction.guild.iconURL({ dynamic: true, size: 512 }))
+            .setFooter({ text: 'Secure Verification System', iconURL: interaction.guild.iconURL({ dynamic: true }) })
             .setTimestamp();
 
-        // Button with an icon
+        // Button
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('verify_button')
                 .setLabel('Verify Me!')
-                .setEmoji('✅')
+                .setEmoji('🔐')
                 .setStyle(ButtonStyle.Success)
         );
 
-        // Send the message into the channel
         await interaction.channel.send({ embeds: [embed], components: [row] });
 
-        // Admin confirmation (invisible to others)
         await interaction.reply({
-            content: '✅ The verification message has been successfully deployed!',
+            content: '✅ Advanced verification message deployed successfully!',
             ephemeral: true
         });
     },
