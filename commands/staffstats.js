@@ -1,33 +1,63 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const pool = require('../database');
 
-// Note: For a production bot, you should fetch/save this data from a database (e.g., MongoDB, Quick.db)
-const staffData = new Map(); 
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS staff_stats (
+      user_id TEXT NOT NULL,
+      guild_id TEXT NOT NULL,
+      tickets_closed INTEGER DEFAULT 0,
+      messages_cleared INTEGER DEFAULT 0,
+      warns_given INTEGER DEFAULT 0,
+      PRIMARY KEY (user_id, guild_id)
+    )
+  `);
+}
+initDB().catch(err => console.error('❌ StaffStats DB init error:', err));
+
+// Helper to increment a stat — called from ticket.js, clear.js, warn.js
+async function incrementStat(userId, guildId, field) {
+  await pool.query(`
+    INSERT INTO staff_stats (user_id, guild_id, ${field})
+    VALUES ($1, $2, 1)
+    ON CONFLICT (user_id, guild_id) DO UPDATE SET ${field} = staff_stats.${field} + 1
+  `, [userId, guildId]);
+}
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName('staffstats')
-        .setDescription('View the management and moderation activity of a staff member.')
-        .addUserOption(option => option.setName('target').setDescription('The moderator to check').setRequired(true))
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  data: new SlashCommandBuilder()
+    .setName('staffstats')
+    .setDescription('View the moderation activity of a staff member.')
+    .addUserOption(option =>
+      option.setName('target').setDescription('The staff member to check').setRequired(true)
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
-    async execute(interaction) {
-        const target = interaction.options.getUser('target');
-        
-        // Fallback data structure if the staff member has no logs yet
-        const stats = staffData.get(target.id) || { ticketsClosed: 0, messagesCleared: 0, warnsGiven: 0 };
+  async execute(interaction) {
+    const target = interaction.options.getUser('target');
+    const guildId = interaction.guild.id;
 
-        const embed = new EmbedBuilder()
-            .setTitle(`📊 Staff Activity: ${target.username}`)
-            .setColor(0x5865F2)
-            .setThumbnail(target.displayAvatarURL({ dynamic: true }))
-            .addFields(
-                { name: '🎟️ Tickets Resolved', value: `\`${stats.ticketsClosed}\``, inline: true },
-                { name: '🧹 Messages Cleared', value: `\`${stats.messagesCleared}\``, inline: true },
-                { name: '⚠️ Warnings Issued', value: `\`${stats.warnsGiven}\``, inline: true }
-            )
-            .setTimestamp()
-            .setFooter({ text: 'Oscar Management Utility' });
+    const { rows } = await pool.query(
+      `SELECT * FROM staff_stats WHERE user_id = $1 AND guild_id = $2`,
+      [target.id, guildId]
+    );
 
-        await interaction.reply({ embeds: [embed] });
-    },
+    const stats = rows[0] || { tickets_closed: 0, messages_cleared: 0, warns_given: 0 };
+
+    const embed = new EmbedBuilder()
+      .setTitle(`📊 Staff Activity: ${target.username}`)
+      .setColor(0x5865F2)
+      .setThumbnail(target.displayAvatarURL({ extension: 'png' }))
+      .addFields(
+        { name: '🎟️ Tickets Closed', value: `\`${stats.tickets_closed}\``, inline: true },
+        { name: '🧹 Messages Cleared', value: `\`${stats.messages_cleared}\``, inline: true },
+        { name: '⚠️ Warnings Issued', value: `\`${stats.warns_given}\``, inline: true },
+      )
+      .setTimestamp()
+      .setFooter({ text: 'Oscar Management Utility' });
+
+    return interaction.reply({ embeds: [embed] });
+  },
+
+  incrementStat,
 };
