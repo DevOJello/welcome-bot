@@ -28,7 +28,13 @@ module.exports = {
     await interaction.deferReply({ flags: 64 });
 
     try {
-      const deleted = await target.bulkDelete(amount, true); // true = skip messages older than 14 days
+      const deleted = await target.bulkDelete(amount, true);
+
+      // Track stat
+      try {
+        const { incrementStat } = require('./staffstats');
+        await incrementStat(interaction.user.id, interaction.guild.id, 'messages_cleared');
+      } catch {}
 
       return interaction.editReply({
         embeds: [new EmbedBuilder()
