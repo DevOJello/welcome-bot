@@ -80,6 +80,12 @@ async function closeTicket(interaction, channelId, channel, guild) {
 
   await pool.query(`UPDATE tickets SET status = 'closed' WHERE channel_id = $1`, [channelId]);
 
+  // Track stat
+  try {
+    const { incrementStat } = require('./staffstats');
+    await incrementStat(interaction.user.id, guild.id, 'tickets_closed');
+  } catch {}
+
   setTimeout(async () => {
     try { await channel.delete(); } catch {}
   }, 5000);
