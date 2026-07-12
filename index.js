@@ -2,23 +2,28 @@ const fs = require('fs');
 const path = require('path');
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require('discord.js');
 require('dotenv').config();
+
 const express = require('express');
 const app = express();
 app.get('/', (req, res) => res.send('Welcome Bot online'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent, // 👈 Here is the fix for your transcripts!
   ],
   partials: ['MESSAGE', 'CHANNEL', 'REACTION'],
 });
+
 client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'commands');
 if (!fs.existsSync(commandsPath)) fs.mkdirSync(commandsPath);
+
 for (const file of fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'))) {
   const command = require(path.join(commandsPath, file));
   if (command.data && typeof command.data.toJSON === 'function') {
@@ -26,8 +31,10 @@ for (const file of fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'))) 
     console.log(`✔ Loaded: ${command.data.name}`);
   }
 }
+
 const eventsPath = path.join(__dirname, 'events');
 if (!fs.existsSync(eventsPath)) fs.mkdirSync(eventsPath);
+
 for (const file of fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'))) {
   const event = require(path.join(eventsPath, file));
   if (event.once) {
@@ -36,8 +43,11 @@ for (const file of fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'))) {
     client.on(event.name, (...args) => event.execute(...args, client));
   }
 }
+
 const rest = new REST({ version: '10' }).setToken(process.env.WELCOME_TOKEN);
-client.once('clientReady', async () => {
+
+// 👈 Changed 'clientReady' to 'ready' to ensure this block actually runs
+client.once('ready', async () => {
   console.log(`👋 Welcome Bot logged in as ${client.user.tag}`);
   try {
     const commandsJSON = Array.from(client.commands.values()).map(cmd => cmd.data.toJSON());
@@ -51,6 +61,7 @@ client.once('clientReady', async () => {
     console.error('Failed to deploy commands:', err);
   }
 });
+
 client.on('interactionCreate', async (interaction) => {
   // Handle button interactions
   if (interaction.isButton()) {
@@ -69,6 +80,7 @@ client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   const command = client.commands.get(interaction.commandName);
   if (!command) return;
+  
   try {
     await command.execute(interaction, client);
   } catch (error) {
@@ -82,4 +94,5 @@ client.on('interactionCreate', async (interaction) => {
     } catch {}
   }
 });
+
 client.login(process.env.WELCOME_TOKEN);
