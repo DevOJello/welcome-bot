@@ -18,9 +18,11 @@ async function initDB() {
       channel_id TEXT NOT NULL,
       user_id TEXT NOT NULL,
       status TEXT DEFAULT 'open',
+      closed_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ`);
 }
 initDB().catch(err => console.error('❌ Ticket DB init error:', err));
 
@@ -30,44 +32,65 @@ async function getConfig(guildId) {
 }
 
 async function generateTranscript(channel) {
-  const messages = await channel.messages.fetch({ limit: 100 });
-  const sorted = [...messages.values()].reverse();
-  const lines = sorted.map(m =>
-    `[${m.createdAt.toISOString()}] ${m.author.tag}: ${m.content || '[attachment/embed]'}`
-  ).join('\n');
-  return lines || 'No messages found.';
+  let allMessages = [];
+  let lastId = null;
+
+  // Fetch all messages in batches of 100
+  while (true) {
+    const options = { limit: 100 };
+    if (lastId) options.before = lastId;
+    const batch = await channel.messages.fetch(options);
+    if (batch.size === 0) break;
+    allMessages = allMessages.concat([...batch.values()]);
+    lastId = batch.last().id;
+    if (batch.size < 100) break;
+  }
+
+  const sorted = allMessages.reverse();
+  const header = `Ticket Transcript — #${channel.name}\nTotal messages: ${sorted.length}\n${'─'.repeat(50)}\n\n`;
+  const lines = sorted.map(m => {
+    const time = m.createdAt.toISOString().replace('T', ' ').slice(0, 19);
+
+    const parts = [];
+    if (m.content) parts.push(m.content);
+    if (m.attachments.size > 0) {
+      parts.push(`[${m.attachments.size} attachment(s): ${[...m.attachments.values()].map(a => a.url).join(' | ')}]`);
+    }
+    if (m.embeds.length > 0) {
+      parts.push(`[${m.embeds.length} embed(s): ${m.embeds.map(e => e.title || e.description?.slice(0, 50) || 'embed').join(' | ')}]`);
+    }
+    const content = parts.join(' ') || '[empty message]';
+
+    return `[${time}] ${m.author.tag}: ${content}`;
+  }).join('\n');
+
+  return header + (lines || 'No messages found.');
 }
 
-async function closeTicket(interaction, channelId, channel, guild) {
-  const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id = $1 AND status = 'open'`, [channelId]);
-  if (rows.length === 0) return interaction.reply({ content: '⚠️ This ticket is already closed.', flags: 64 });
-
-  const ticket = rows[0];
+async function saveTranscriptAndDelete(channel, guild, ticket, closedById, client) {
   const config = await getConfig(guild.id);
 
-  await interaction.reply({
-    embeds: [new EmbedBuilder()
-      .setColor(0xff4444)
-      .setDescription('🔒 Closing ticket and saving transcript...')
-    ]
-  });
-
-  // Save transcript
   if (config?.transcript_channel_id) {
     try {
       const transcript = await generateTranscript(channel);
       const transcriptChannel = guild.channels.cache.get(config.transcript_channel_id);
       if (transcriptChannel) {
         const buffer = Buffer.from(transcript, 'utf8');
-        const attachment = new AttachmentBuilder(buffer, { name: `ticket-${channelId}.txt` });
+        const attachment = new AttachmentBuilder(buffer, { name: `ticket-${ticket.id}-${channel.name}.txt` });
+
+        let closedByUser;
+        try { closedByUser = await client.users.fetch(closedById); } catch {}
+
         await transcriptChannel.send({
           embeds: [new EmbedBuilder()
             .setTitle('📋 Ticket Transcript')
             .setColor(0x5865f2)
             .addFields(
+              { name: '🎫 Ticket', value: `#${channel.name}`, inline: true },
               { name: '👤 Opened by', value: `<@${ticket.user_id}>`, inline: true },
-              { name: '🔒 Closed by', value: `<@${interaction.user.id}>`, inline: true },
-              { name: '📅 Date', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+              { name: '🔒 Closed by', value: closedByUser ? `<@${closedByUser.id}>` : 'Unknown', inline: true },
+              { name: '📅 Opened', value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:F>`, inline: true },
+              { name: '🗑️ Deleted', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
             )
             .setTimestamp()],
           files: [attachment]
@@ -78,18 +101,46 @@ async function closeTicket(interaction, channelId, channel, guild) {
     }
   }
 
-  await pool.query(`UPDATE tickets SET status = 'closed' WHERE channel_id = $1`, [channelId]);
+  await pool.query(`UPDATE tickets SET status = 'deleted' WHERE id = $1`, [ticket.id]);
 
-  // Track stat
-  try {
-    const { incrementStat } = require('./staffstats');
-    await incrementStat(interaction.user.id, guild.id, 'tickets_closed');
-  } catch {}
-
-  setTimeout(async () => {
-    try { await channel.delete(); } catch {}
-  }, 5000);
+  try { await channel.delete(); } catch {}
 }
+
+// ── Scheduler: auto-delete tickets closed for 24h ───────────────────────────
+let schedulerClient = null;
+
+async function runScheduler(client) {
+  try {
+    const { rows } = await pool.query(`
+      SELECT t.*, tc.transcript_channel_id, tc.staff_role_id
+      FROM tickets t
+      LEFT JOIN ticket_config tc ON tc.guild_id = t.guild_id
+      WHERE t.status = 'closed' AND t.closed_at <= NOW() - INTERVAL '24 hours'
+    `);
+
+    for (const ticket of rows) {
+      try {
+        const guild = client.guilds.cache.get(ticket.guild_id);
+        if (!guild) continue;
+        const channel = guild.channels.cache.get(ticket.channel_id);
+        if (!channel) {
+          await pool.query(`UPDATE tickets SET status = 'deleted' WHERE id = $1`, [ticket.id]);
+          continue;
+        }
+        await saveTranscriptAndDelete(channel, guild, ticket, null, client);
+        console.log(`[Tickets] Auto-deleted ticket #${ticket.id} after 24h`);
+      } catch (err) {
+        console.error(`[Tickets] Failed to auto-delete ticket ${ticket.id}:`, err.message);
+      }
+    }
+  } catch (err) {
+    console.error('[Tickets] Scheduler error:', err.message);
+  }
+}
+
+setInterval(() => {
+  if (schedulerClient) runScheduler(schedulerClient);
+}, 5 * 60 * 1000); // check every 5 minutes
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -130,6 +181,7 @@ module.exports = {
     ),
 
   async execute(interaction, client) {
+    schedulerClient = client;
     const guild = interaction.guild;
     if (!guild) return interaction.reply({ content: '⚠️ This command can only be used inside a server.', flags: 64 });
 
@@ -190,7 +242,51 @@ module.exports = {
 
     // ── CLOSE ─────────────────────────────────────────────────────────────────
     if (sub === 'close') {
-      await closeTicket(interaction, interaction.channelId, interaction.channel, guild);
+      const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id = $1 AND status = 'open'`, [interaction.channelId]);
+      if (rows.length === 0) return interaction.reply({ content: '⚠️ This is not an active ticket channel.', flags: 64 });
+
+      const ticket = rows[0];
+      const config = await getConfig(guild.id);
+
+      // Hide from the ticket creator, staff can still see
+      try {
+        await interaction.channel.permissionOverwrites.edit(ticket.user_id, { ViewChannel: false });
+      } catch {}
+
+      await pool.query(`UPDATE tickets SET status = 'closed', closed_at = NOW() WHERE channel_id = $1`, [interaction.channelId]);
+
+      // Track stat
+      try {
+        const { incrementStat } = require('./staffstats');
+        await incrementStat(interaction.user.id, guild.id, 'tickets_closed');
+      } catch {}
+
+      const deleteTime = Math.floor(Date.now() / 1000) + 86400;
+      const reopenRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`ticket_reopen_${interaction.channelId}`)
+          .setLabel('Reopen Ticket')
+          .setEmoji('🔓')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`ticket_delete_${interaction.channelId}`)
+          .setLabel('Delete Now')
+          .setEmoji('🗑️')
+          .setStyle(ButtonStyle.Danger),
+      );
+
+      return interaction.reply({
+        embeds: [new EmbedBuilder()
+          .setTitle('🔒 Ticket Closed')
+          .setColor(0xff4444)
+          .setDescription(
+            `This ticket has been closed by <@${interaction.user.id}>.\n\n` +
+            `The ticket creator can no longer see this channel.\n` +
+            `🗑️ This ticket will be **automatically deleted** <t:${deleteTime}:R> unless reopened.`
+          )
+          .setFooter({ text: 'Only staff can see this channel now' })],
+        components: [reopenRow]
+      });
     }
 
     // ── ADD ───────────────────────────────────────────────────────────────────
@@ -200,9 +296,7 @@ module.exports = {
       const user = interaction.options.getUser('user');
       await interaction.channel.permissionOverwrites.edit(user.id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true });
       return interaction.reply({
-        embeds: [new EmbedBuilder()
-          .setColor(0x00cc66)
-          .setDescription(`✅ <@${user.id}> has been added to this ticket.`)]
+        embeds: [new EmbedBuilder().setColor(0x00cc66).setDescription(`✅ <@${user.id}> has been added to this ticket.`)]
       });
     }
 
@@ -213,21 +307,115 @@ module.exports = {
       const user = interaction.options.getUser('user');
       await interaction.channel.permissionOverwrites.edit(user.id, { ViewChannel: false });
       return interaction.reply({
-        embeds: [new EmbedBuilder()
-          .setColor(0xff4444)
-          .setDescription(`✅ <@${user.id}> has been removed from this ticket.`)]
+        embeds: [new EmbedBuilder().setColor(0xff4444).setDescription(`✅ <@${user.id}> has been removed from this ticket.`)]
       });
     }
   },
 
   async handleButton(interaction, client) {
     if (!interaction.isButton()) return;
+    schedulerClient = client;
 
-    // ── CLOSE BUTTON ─────────────────────────────────────────────────────────
-    if (interaction.customId.startsWith('ticket_close_')) {
-      const channelId = interaction.customId.replace('ticket_close_', '');
-      await closeTicket(interaction, channelId, interaction.channel, interaction.guild);
+    // ── REOPEN ────────────────────────────────────────────────────────────────
+    if (interaction.customId.startsWith('ticket_reopen_')) {
+      const channelId = interaction.customId.replace('ticket_reopen_', '');
+      const guild = interaction.guild;
+
+      const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id = $1 AND status = 'closed'`, [channelId]);
+      if (rows.length === 0) return interaction.reply({ content: '⚠️ This ticket cannot be reopened.', flags: 64 });
+
+      const ticket = rows[0];
+
+      // Restore user access
+      try {
+        await interaction.channel.permissionOverwrites.edit(ticket.user_id, {
+          ViewChannel: true, SendMessages: true, ReadMessageHistory: true
+        });
+      } catch {}
+
+      await pool.query(`UPDATE tickets SET status = 'open', closed_at = NULL WHERE channel_id = $1`, [channelId]);
+
+      const closeRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`ticket_close_btn_${channelId}`)
+          .setLabel('Close Ticket')
+          .setEmoji('🔒')
+          .setStyle(ButtonStyle.Danger)
+      );
+
+      return interaction.update({
+        embeds: [new EmbedBuilder()
+          .setTitle('🔓 Ticket Reopened')
+          .setColor(0x00cc66)
+          .setDescription(`This ticket has been reopened by <@${interaction.user.id}>.\n<@${ticket.user_id}> can now see this channel again.`)],
+        components: [closeRow]
+      });
+    }
+
+    // ── DELETE NOW ────────────────────────────────────────────────────────────
+    if (interaction.customId.startsWith('ticket_delete_')) {
+      const channelId = interaction.customId.replace('ticket_delete_', '');
+      const guild = interaction.guild;
+
+      const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id = $1`, [channelId]);
+      if (rows.length === 0) return interaction.reply({ content: '⚠️ Ticket not found.', flags: 64 });
+
+      await interaction.update({
+        embeds: [new EmbedBuilder().setColor(0xff4444).setDescription('🗑️ Saving transcript and deleting...')],
+        components: []
+      });
+
+      await saveTranscriptAndDelete(interaction.channel, guild, rows[0], interaction.user.id, client);
       return;
+    }
+
+    // ── CLOSE BUTTON (from inside the ticket) ─────────────────────────────────
+    if (interaction.customId.startsWith('ticket_close_btn_')) {
+      const channelId = interaction.customId.replace('ticket_close_btn_', '');
+      const guild = interaction.guild;
+
+      const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id = $1 AND status = 'open'`, [channelId]);
+      if (rows.length === 0) return interaction.reply({ content: '⚠️ This ticket is already closed.', flags: 64 });
+
+      const ticket = rows[0];
+
+      try {
+        await interaction.channel.permissionOverwrites.edit(ticket.user_id, { ViewChannel: false });
+      } catch {}
+
+      await pool.query(`UPDATE tickets SET status = 'closed', closed_at = NOW() WHERE channel_id = $1`, [channelId]);
+
+      try {
+        const { incrementStat } = require('./staffstats');
+        await incrementStat(interaction.user.id, guild.id, 'tickets_closed');
+      } catch {}
+
+      const deleteTime = Math.floor(Date.now() / 1000) + 86400;
+      const reopenRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`ticket_reopen_${channelId}`)
+          .setLabel('Reopen Ticket')
+          .setEmoji('🔓')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`ticket_delete_${channelId}`)
+          .setLabel('Delete Now')
+          .setEmoji('🗑️')
+          .setStyle(ButtonStyle.Danger),
+      );
+
+      return interaction.update({
+        embeds: [new EmbedBuilder()
+          .setTitle('🔒 Ticket Closed')
+          .setColor(0xff4444)
+          .setDescription(
+            `This ticket has been closed by <@${interaction.user.id}>.\n\n` +
+            `The ticket creator can no longer see this channel.\n` +
+            `🗑️ This ticket will be **automatically deleted** <t:${deleteTime}:R> unless reopened.`
+          )
+          .setFooter({ text: 'Only staff can see this channel now' })],
+        components: [reopenRow]
+      });
     }
 
     // ── CREATE BUTTON ─────────────────────────────────────────────────────────
@@ -245,10 +433,7 @@ module.exports = {
     `, [guildId, user.id]);
 
     if (existing.length > 0) {
-      return interaction.reply({
-        content: `⚠️ You already have an open ticket: <#${existing[0].channel_id}>`,
-        flags: 64
-      });
+      return interaction.reply({ content: `⚠️ You already have an open ticket: <#${existing[0].channel_id}>`, flags: 64 });
     }
 
     const channelOptions = {
@@ -282,7 +467,7 @@ module.exports = {
 
     const closeRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`ticket_close_${ticketChannel.id}`)
+        .setCustomId(`ticket_close_btn_${ticketChannel.id}`)
         .setLabel('Close Ticket')
         .setEmoji('🔒')
         .setStyle(ButtonStyle.Danger)
@@ -299,7 +484,7 @@ module.exports = {
           { name: '📅 Opened at', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
         )
         .setThumbnail(user.displayAvatarURL({ extension: 'png', size: 256 }))
-        .setFooter({ text: 'Click the button below to close this ticket' })],
+        .setFooter({ text: 'Click the button below to close this ticket when resolved' })],
       components: [closeRow]
     });
 
