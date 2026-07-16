@@ -8,13 +8,15 @@ module.exports = {
     .setName('hangrygames')
     .setDescription('Play the ultimate Hangry Games battle royale minigame!')
     
-    // 1. /hangrygames new
+    // 1. /hangrygames new (Now with OPTIONAL prize and sponsor!)
     .addSubcommand(sub =>
       sub.setName('new')
         .setDescription('Start a new round of Hangry Games')
+        .addStringOption(opt => opt.setName('prize').setDescription('The prize for this round (optional)'))
+        .addUserOption(opt => opt.setName('sponsor').setDescription('Sponsor of this round (optional)'))
     )
     
-    // 2. /hangrygames giveaway
+    // 2. /hangrygames giveaway (Prize is REQUIRED here)
     .addSubcommand(sub =>
       sub.setName('giveaway')
         .setDescription('Start a Hangry Games giveaway with a custom prize')
@@ -53,6 +55,7 @@ module.exports = {
         return interaction.reply({ content: '❌ A Hangry Games session is already active or in the signup phase!', flags: 64 });
       }
 
+      // If no prize/sponsor is provided, we use nice defaults
       const prize = interaction.options.getString('prize') || 'Eternal Glory 🏆';
       const sponsor = interaction.options.getUser('sponsor');
 
@@ -119,10 +122,16 @@ module.exports = {
         await interaction.reply({ content: '🍔 You have volunteered for the Hangry Games! Good luck!', flags: 64 });
       }
 
+      // Pluralization check: 1 tribute has vs 0/2+ tributes have
+      const count = game.players.size;
+      const tributeStatusText = count === 1 
+        ? `⚔️ **1 tribute has volunteered so far.**` 
+        : `⚔️ **${count} tributes have volunteered so far.**`;
+
       // Live update the lobby embed counter
       const originalEmbed = interaction.message.embeds[0];
       const updatedEmbed = EmbedBuilder.from(originalEmbed)
-        .setDescription(`**Phase 1 - Gathering Tributes!**\n\nClick **Join** 🍔 to enter the arena and fight for survival!\n\n⚔️ **${game.players.size} tributes have volunteered so far.**`);
+        .setDescription(`**Phase 1 - Gathering Tributes!**\n\nClick **Join** 🍔 to enter the arena and fight for survival!\n\n${tributeStatusText}`);
 
       await interaction.message.edit({ embeds: [updatedEmbed] });
     }
@@ -165,7 +174,7 @@ module.exports = {
         components: []
       });
 
-      // Call our localized simulation pipeline (We will build this next!)
+      // Call our simulation pipeline
       module.exports.runGameSimulation(interaction, game);
     }
   },
@@ -183,6 +192,6 @@ module.exports = {
       ]
     });
 
-    // TODO: We will build the round-by-round event runner here next!
+    // We will build the simulation rounds next!
   }
 };
