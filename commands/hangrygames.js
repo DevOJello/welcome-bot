@@ -8,7 +8,7 @@ module.exports = {
     .setName('hangrygames')
     .setDescription('Play the ultimate Hangry Games battle royale minigame!')
     
-    // 1. /hangrygames new (Now with OPTIONAL prize and sponsor!)
+    // 1. /hangrygames new
     .addSubcommand(sub =>
       sub.setName('new')
         .setDescription('Start a new round of Hangry Games')
@@ -16,7 +16,7 @@ module.exports = {
         .addUserOption(opt => opt.setName('sponsor').setDescription('Sponsor of this round (optional)'))
     )
     
-    // 2. /hangrygames giveaway (Prize is REQUIRED here)
+    // 2. /hangrygames giveaway
     .addSubcommand(sub =>
       sub.setName('giveaway')
         .setDescription('Start a Hangry Games giveaway with a custom prize')
@@ -24,7 +24,16 @@ module.exports = {
         .addUserOption(opt => opt.setName('sponsor').setDescription('Sponsor of the prize'))
     )
     
-    // 3. /hangrygames cancel
+    // 3. /hangrygames role (NEW - Instantly starts with a role!)
+    .addSubcommand(sub =>
+      sub.setName('role')
+        .setDescription('Immediately start a Hangry Games with everyone in a specific role')
+        .addRoleOption(opt => opt.setName('role').setDescription('The role to pull players from').setRequired(true))
+        .addStringOption(opt => opt.setName('prize').setDescription('The prize for this round (optional)'))
+        .addUserOption(opt => opt.setName('sponsor').setDescription('Sponsor of this round (optional)'))
+    )
+    
+    // 4. /hangrygames cancel
     .addSubcommand(sub =>
       sub.setName('cancel')
         .setDescription('Cancel the current active Hangry Games on this server')
@@ -49,17 +58,58 @@ module.exports = {
       });
     }
 
-    // ── START / LOBBY SETUP ─────────────────────────────────────────────────
-    if (sub === 'new' || sub === 'giveaway') {
-      if (activeGames.has(guildId)) {
-        return interaction.reply({ content: '❌ A Hangry Games session is already active or in the signup phase!', flags: 64 });
+    // Check if a game is already active
+    if (activeGames.has(guildId)) {
+      return interaction.reply({ content: '❌ A Hangry Games session is already active on this server!', flags: 64 });
+    }
+
+    const prize = interaction.options.getString('prize') || 'Eternal Glory 🏆';
+    const sponsor = interaction.options.getUser('sponsor');
+
+    // ── ROLE COMMAND (INSTANT START) ────────────────────────────────────────
+    if (sub === 'role') {
+      const role = interaction.options.getRole('role');
+
+      // We defer the reply because fetching members can take a brief second on larger servers
+      await interaction.deferReply();
+
+      try {
+        // Fetch all guild members to make sure cache is fully updated
+        await interaction.guild.members.fetch();
+      } catch (err) {
+        console.error('Failed to fetch guild members:', err);
       }
 
-      // If no prize/sponsor is provided, we use nice defaults
-      const prize = interaction.options.getString('prize') || 'Eternal Glory 🏆';
-      const sponsor = interaction.options.getUser('sponsor');
+      // Filter out bots to only include real players who have the role
+      const membersWithRole = role.members.filter(member => !member.user.bot);
 
-      // Initialize game state
+      if (membersWithRole.size < 2) {
+        return interaction.editReply({ 
+          content: `❌ You need at least **2 human players** with the <@&${role.id}> role to start the Hangry Games!` 
+        });
+      }
+
+      // Setup the playing state immediately
+      const game = {
+        hostId: interaction.user.id,
+        prize: prize,
+        sponsorId: sponsor ? sponsor.id : null,
+        players: new Set(membersWithRole.map(member => member.id)),
+        status: 'playing'
+      };
+
+      activeGames.set(guildId, game);
+
+      await interaction.editReply({
+        content: `⚔️ **Instant Match Triggered!**\nGrabbing everyone with the <@&${role.id}> role (${membersWithRole.size} players)...`
+      });
+
+      // Jump straight into the simulation!
+      return module.exports.runGameSimulation(interaction, game);
+    }
+
+    // ── STANDARD SETUP (new & giveaway) ────────────────────────────────────
+    if (sub === 'new' || sub === 'giveaway') {
       activeGames.set(guildId, {
         hostId: interaction.user.id,
         prize: prize,
@@ -122,13 +172,11 @@ module.exports = {
         await interaction.reply({ content: '🍔 You have volunteered for the Hangry Games! Good luck!', flags: 64 });
       }
 
-      // Pluralization check: 1 tribute has vs 0/2+ tributes have
       const count = game.players.size;
       const tributeStatusText = count === 1 
         ? `⚔️ **1 tribute has volunteered so far.**` 
         : `⚔️ **${count} tributes have volunteered so far.**`;
 
-      // Live update the lobby embed counter
       const originalEmbed = interaction.message.embeds[0];
       const updatedEmbed = EmbedBuilder.from(originalEmbed)
         .setDescription(`**Phase 1 - Gathering Tributes!**\n\nClick **Join** 🍔 to enter the arena and fight for survival!\n\n${tributeStatusText}`);
@@ -165,7 +213,6 @@ module.exports = {
         return interaction.reply({ content: '❌ You need at least **2 tributes** to start the Hangry Games!', flags: 64 });
       }
 
-      // Set state to playing to block new entries
       game.status = 'playing';
 
       await interaction.update({
@@ -174,7 +221,6 @@ module.exports = {
         components: []
       });
 
-      // Call our simulation pipeline
       module.exports.runGameSimulation(interaction, game);
     }
   },
@@ -192,6 +238,6 @@ module.exports = {
       ]
     });
 
-    // We will build the simulation rounds next!
+    // We will build the round-by-round simulation engine next!
   }
 };
