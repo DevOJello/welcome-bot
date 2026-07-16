@@ -227,20 +227,20 @@ module.exports = {
     let survivors = Array.from(game.players);
     let round = 1;
 
-    // Helper to pause execution between round embeds
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    // ── ORIGINAL, CARTOONISH FOOD-THEMED EVENT DATABASES ────────────────────
+    // Solo Accidents (1 persoon)
     const soloDeaths = [
       "**{player1}** tried to eat a super-spicy experimental chili pepper and spontaneously combusted! 🔥",
       "**{player1}** tripped and fell into a bubbling vat of boiling cheese sauce. Rest in cheddar! 🧀",
-      "**{player1}** got an aggressive sugar rush from eating 12 glazed donuts and ran straight into a brick wall.",
+      "**{player1}** got an aggressive sugar rush from eating 12 glazed donuts and ran straight into a wall.",
       "**{player1}** choked on an incredibly dry cracker because they forgot to drink water.",
       "**{player1}** tried to steal honey from giant mutant bees and got stung out of the arena! 🐝",
       "**{player1}** drank a mysterious glowing soda and slowly dissolved into a puddle of juice.",
       "**{player1}** got crushed by a massive, falling meatball. Mama mia! 🧆"
     ];
 
+    // Combat (precies 2 personen)
     const combatEvents = [
       "**{player1}** slipped on a banana peel left behind by **{player2}** and slid off the edge! 🍌",
       "**{player1}** was knocked out cold by a flying stale baguette thrown with absolute force by **{player2}**! 🥖",
@@ -250,117 +250,136 @@ module.exports = {
       "**{player1}** tried to steal **{player2}**'s legendary golden french fry and paid with their life!"
     ];
 
-    const safeEvents = [
-      "**{player1}** and **{player2}** put aside their hunger and shared a giant pizza. Safe for now! 🍕",
+    // Safe (precies 2 of 1 persoon)
+    const safeEventsSolo = [
       "**{player1}** found a hidden snack cache and recovered some stamina.",
       "**{player1}** hid inside a hollow giant cabbage to avoid getting spotted.",
-      "**{player1}** successfully defended their juicebox from an aggressive wild raccoon.",
+      "**{player1}** successfully defended their juicebox from an aggressive wild raccoon."
+    ];
+
+    const safeEventsDuo = [
+      "**{player1}** and **{player2}** put aside their hunger and shared a giant pizza. Safe for now! 🍕",
       "**{player1}** and **{player2}** had an intense staring contest over a cookie, but both survived."
     ];
 
-    // Introductory Announcement
+    // Aankondiging start
     await channel.send({
       embeds: [new EmbedBuilder()
         .setTitle('🏁 The Hangry Games Have Begun!')
         .setColor(0x5865F2)
-        .setDescription(`**${survivors.length} tributes** step up to the dining table. Who will feast, and who will get cooked?\n\nLet the game begin!`)
+        .setDescription(`**${survivors.length} tributes** step up to the dining table. Who will eat, and who will get cooked?\n\nLet the game begin!`)
       ]
     });
 
     await sleep(4000);
 
-    // Round Loop
+    // Hoofd-loop van de rondes
     while (survivors.length > 1) {
-      // Check if the game has been cancelled mid-match
       if (!activeGames.has(guildId)) return;
 
-      const roundEvents = [];
+      // Aankondiging van de nieuwe ronde
+      await channel.send({
+        embeds: [new EmbedBuilder()
+          .setTitle(`🥞 Round ${round} 🥞`)
+          .setColor(0xFEE75C)
+          .setDescription(`*The arena shifts... Let's see what happens to our ${survivors.length} remaining tributes!*`)
+        ]
+      });
+
+      await sleep(2500);
+
       const deadThisRound = new Set();
-      
-      // Determine target deaths per round to prevent games from dragging
       let targetDeaths = 1;
       if (survivors.length > 8) targetDeaths = 3;
       else if (survivors.length > 4) targetDeaths = 2;
 
-      // Shuffle survivors
       let pool = [...survivors];
       pool.sort(() => Math.random() - 0.5);
 
       while (pool.length > 0) {
+        if (!activeGames.has(guildId)) return;
+
+        let embed = new EmbedBuilder().setColor(0x3498DB);
+        let eventText = "";
+        let primaryUserId = null;
+
+        // Als er nog maar 1 speler in de pool zit -> 1-persoon veilig event
         if (pool.length === 1) {
           const player = pool.pop();
-          const event = safeEvents[Math.floor(Math.random() * safeEvents.length)]
+          primaryUserId = player;
+          eventText = safeEventsSolo[Math.floor(Math.random() * safeEventsSolo.length)]
             .replace(/{player1}/g, `<@${player}>`);
-          roundEvents.push(event);
-          break;
-        }
+        } else {
+          // Pak 2 spelers
+          const player1 = pool.pop();
+          const player2 = pool.pop();
+          primaryUserId = player1; // We focussen de PFP thumbnail op de hoofdrolspeler (player 1)
+          const rand = Math.random();
 
-        const player1 = pool.pop();
-        const player2 = pool.pop();
-        const rand = Math.random();
-
-        if (targetDeaths > deadThisRound.size && rand < 0.45) {
-          // ELIMINATION TRIGGERED
-          if (Math.random() < 0.5) {
-            // Player 2 kills Player 1
-            const event = combatEvents[Math.floor(Math.random() * combatEvents.length)]
+          if (targetDeaths > deadThisRound.size && rand < 0.45) {
+            // ELIMINATIE EVENT (1 of 2 spelers)
+            if (Math.random() < 0.5) {
+              // Player 2 elimineert Player 1 (2 spelers)
+              eventText = combatEvents[Math.floor(Math.random() * combatEvents.length)]
+                .replace(/{player1}/g, `<@${player1}>`)
+                .replace(/{player2}/g, `<@${player2}>`);
+              deadThisRound.add(player1);
+            } else {
+              // Solo dood voor Player 1 (1 speler). Player 2 stoppen we terug in de pool zodat hij later aan de beurt komt.
+              eventText = soloDeaths[Math.floor(Math.random() * soloDeaths.length)]
+                .replace(/{player1}/g, `<@${player1}>`);
+              deadThisRound.add(player1);
+              pool.push(player2);
+            }
+          } else {
+            // DUO VEILIG EVENT (2 spelers)
+            eventText = safeEventsDuo[Math.floor(Math.random() * safeEventsDuo.length)]
               .replace(/{player1}/g, `<@${player1}>`)
               .replace(/{player2}/g, `<@${player2}>`);
-            roundEvents.push(event);
-            deadThisRound.add(player1);
-          } else {
-            // Solo accident kills Player 1, Player 2 is safe
-            const event = soloDeaths[Math.floor(Math.random() * soloDeaths.length)]
-              .replace(/{player1}/g, `<@${player1}>`);
-            const safeEvent = safeEvents[Math.floor(Math.random() * safeEvents.length)]
-              .replace(/{player1}/g, `<@${player2}>`)
-              .replace(/{player2}/g, `<@${player1}>`); // fallback
-
-            roundEvents.push(event);
-            roundEvents.push(safeEvent);
-            deadThisRound.add(player1);
           }
-        } else {
-          // SAFE EVENT FOR BOTH
-          const event = safeEvents[Math.floor(Math.random() * safeEvents.length)]
-            .replace(/{player1}/g, `<@${player1}>`)
-            .replace(/{player2}/g, `<@${player2}>`);
-          roundEvents.push(event);
         }
+
+        // Haal de Discord User op van de hoofdrolspeler om de Profielfoto (Avatar) te krijgen
+        try {
+          const user = await interaction.client.users.fetch(primaryUserId);
+          const avatarUrl = user.displayAvatarURL({ dynamic: true, size: 256 });
+          embed.setThumbnail(avatarUrl);
+        } catch (err) {
+          console.error("Kon avatar niet ophalen:", err);
+        }
+
+        embed.setDescription(eventText);
+        
+        // Verzend het individuele bericht direct in het kanaal
+        await channel.send({ embeds: [embed] });
+        await sleep(3500); // 3,5 seconden pauze tussen elk bericht voor de spanning!
       }
 
-      // Update the survivors pool
+      // Update overlevers
       survivors = survivors.filter(id => !deadThisRound.has(id));
-
-      // Post Round Status
-      const roundEmbed = new EmbedBuilder()
-        .setTitle(`🥞 Round ${round} 🥞`)
-        .setColor(0xFEE75C)
-        .setDescription(roundEvents.join('\n\n'))
-        .setFooter({ text: `${survivors.length} tributes remaining...` });
-
-      await channel.send({ embeds: [roundEmbed] });
-      
       round++;
-      await sleep(5000); // 5 seconds wait so players can read the live action
     }
 
-    // Final safety check
     if (!activeGames.has(guildId)) return;
 
     // ── VICTORY ANNOUNCEMENT ────────────────────────────────────────────────
     const winnerId = survivors[0];
     const sponsorText = game.sponsorId ? `<@${game.sponsorId}>` : `<@${game.hostId}>`;
-
-    const winnerEmbed = new EmbedBuilder()
+    let winnerEmbed = new EmbedBuilder()
       .setTitle('👑 HAIL THE VICTOR! 👑')
       .setColor(0x57F287)
       .setDescription(`🏆 **CONGRATULATIONS <@${winnerId}>!** 🏆\n\nYou have outlasted everyone and survived the brutal tables of the Hangry Games!\n\n🎁 **Prize:** ${game.prize}\n📣 **Sponsor:** ${sponsorText}`)
       .setFooter({ text: 'Thanks for playing Oscar\'s Hangry Games!' });
 
+    try {
+      const winnerUser = await interaction.client.users.fetch(winnerId);
+      winnerEmbed.setThumbnail(winnerUser.displayAvatarURL({ dynamic: true, size: 512 }));
+    } catch (err) {
+      console.error("Kon winnaar avatar niet ophalen:", err);
+    }
+
     await channel.send({ content: `🎉 Congratulations <@${winnerId}>!`, embeds: [winnerEmbed] });
 
-    // Clean up memory
     activeGames.delete(guildId);
   }
 };
