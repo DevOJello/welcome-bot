@@ -6,7 +6,7 @@ const path = require('path');
 // In-memory storage for active games per guild
 const activeGames = new Map();
 
-// File paths to your assets
+// Paden op basis van jouw mappenstructuur
 const soloTemplatePath = path.join(__dirname, '../images/burger_solo.png');
 const vsTemplatePath = path.join(__dirname, '../images/burger_vs.png');
 const skullPath = path.join(__dirname, '../images/skull.png');
@@ -75,7 +75,7 @@ module.exports = {
         isInstantStart = true;
       } catch (error) {
         console.error(error);
-        return interaction.editReply({ content: '❌ Something went wrong while fetching the members of this role. Make sure the GuildMembers Intent is enabled in your Discord Developer Portal!' });
+        return interaction.editReply({ content: '❌ Something went wrong while fetching the members of this role.' });
       }
     }
 
@@ -162,72 +162,64 @@ module.exports = {
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
     async function drawSolo(avatarUrl) {
-      const canvas = createCanvas(1000, 1000);
-      const ctx = canvas.getContext('2d');
-      if (fs.existsSync(soloTemplatePath)) {
-        ctx.drawImage(await loadImage(soloTemplatePath), 0, 0, 1000, 1000);
+      try {
+        const canvas = createCanvas(1000, 1000);
+        const ctx = canvas.getContext('2d');
+        
+        if (fs.existsSync(soloTemplatePath)) {
+          ctx.drawImage(await loadImage(soloTemplatePath), 0, 0, 1000, 1000);
+        } else {
+          console.error(`[CANVAS FOUT] burger_solo.png niet gevonden op pad: ${soloTemplatePath}`);
+        }
+        
+        if (avatarUrl) {
+          const avImg = await loadImage(avatarUrl);
+          ctx.drawImage(avImg, 268, 290, 465, 465);
+        }
+        return canvas.toBuffer('image/png');
+      } catch (err) {
+        console.error('[CANVAS CRASH drawSolo]:', err);
+        return null;
       }
-      try { ctx.drawImage(await loadImage(avatarUrl), 268, 290, 465, 465); } catch(e){}
-      return canvas.toBuffer('image/png');
     }
 
     async function drawVs(winUrl, loseUrl) {
-      const canvas = createCanvas(1000, 600);
-      const ctx = canvas.getContext('2d');
-      if (fs.existsSync(vsTemplatePath)) {
-        ctx.drawImage(await loadImage(vsTemplatePath), 0, 0, 1000, 600);
-      }
-      try { ctx.drawImage(await loadImage(winUrl), 80, 100, 320, 320); } catch(e){}
       try {
-        ctx.drawImage(await loadImage(loseUrl), 600, 100, 320, 320);
+        const canvas = createCanvas(1000, 600);
+        const ctx = canvas.getContext('2d');
+        
+        if (fs.existsSync(vsTemplatePath)) {
+          ctx.drawImage(await loadImage(vsTemplatePath), 0, 0, 1000, 600);
+        } else {
+          console.error(`[CANVAS FOUT] burger_vs.png niet gevonden op pad: ${vsTemplatePath}`);
+        }
+        
+        if (winUrl) ctx.drawImage(await loadImage(winUrl), 80, 100, 320, 320);
+        if (loseUrl) ctx.drawImage(await loadImage(loseUrl), 600, 100, 320, 320);
+        
         if (fs.existsSync(skullPath)) {
           ctx.drawImage(await loadImage(skullPath), 0, 0, 1000, 600);
         }
-      } catch(e){}
-      return canvas.toBuffer('image/png');
+        
+        return canvas.toBuffer('image/png');
+      } catch (err) {
+        console.error('[CANVAS CRASH drawVs]:', err);
+        return null;
+      }
     }
 
     const soloDeaths = [
       "**{player1}** went to take a relaxing shower, but a rogue rubber duck bit their leg, causing them to trip and drown in the tub! 🦆🛁",
       "**{player1}** choked on an incredibly dry cracker because they forgot to drink water! 🥖",
       "**{player1}** slipped on a huge glob of mayonnaise and tumbled straight out of the arena! 🍟",
-      "**{player1}** took a massive bite out of a radioactive pickle and couldn't survive the flavor explosion! 🥒",
-      "**{player1}** got a massive sugar rush from an energy drink and ran head-first out of bounds! ⚡",
-      "**{player1}** tried to open a stubborn jar of hot sauce, but it exploded right in their face! 🌶️",
-      "**{player1}** got trapped inside a giant, sticky cotton candy machine and couldn't break free! 🍭",
-      "**{player1}** mistook a super-powerful blender for a jacuzzi and got spun out of the game! 🌀",
-      "**{player1}** ate a slice of pizza that was way too cheesy and got completely tangled up in mozzarella! 🍕",
-      "**{player1}** tried to ride a giant rolling donut like a wheel, but lost balance and crashed hard! 🍩",
-      "**{player1}** accidentally drank an experimental soda that turned them entirely into carbonated bubbles! 🫧",
-      "**{player1}** reached for a snack but got sucked into a massive vending machine vortex! 🪙",
-      "**{player1}** tried to eat a soup that was way too hot and melted right through the arena floor! 🥣",
-      "**{player1}** got chased out of the arena by a rogue, sentient gingerbread man! 🫚",
-      "**{player1}** ate a mystery mushroom and floated away into outer space like a balloon! 🍄",
-      "**{player1}** accidentally tripped a trap and got buried under a massive avalanche of popcorn! 🍿",
-      "**{player1}** tried to double-dip a chip and was immediately blasted away by the Food Police! 👮‍♂️",
-      "**{player1}** bit into a jawbreaker that was so hard it shattered the space-time continuum, removing them from reality! 🍬",
-      "**{player1}** tried to sleep inside a giant taco shell, but got folded up and shipped away! 🌮"
+      "**{player1}** took a massive bite out of a radioactive pickle and couldn't survive the flavor explosion! 🥒"
     ];
 
     const combatEvents = [
       "**{player1}** chopped **{player2}** into small pieces and turned them into a green bean casserole! 🍲",
       "**{player1}** threw a blazing hot slice of pizza directly at **{player2}**, forcing them out of the game! 🍕",
       "**{player1}** stole **{player2}**'s legendary golden french fry and eliminated them on the spot! 🍟",
-      "**{player1}** knocked out **{player2}** cold using a rock-hard, stale baguette! 🥖",
-      "**{player1}** covered the floor in slippery maple syrup, causing **{player2}** to slide right off the map! 🥞",
-      "**{player1}** aggressively pelted **{player2}** with stale meatballs until they surrendered! 🧆",
-      "**{player1}** trapped **{player2}** inside a giant waffle iron and pressed down the lid! 🧇",
-      "**{player1}** sprayed a mountain of whipped cream into **{player2}**'s eyes, blinding them into a pit! 🧁",
-      "**{player1}** challenged **{player2}** to a spicy chicken wing showdown, and **{player2}** couldn't take the heat! 🍗",
-      "**{player1}** used a high-pressure mustard bottle to blast **{player2}** straight out of the arena! 🌭",
-      "**{player1}** trapped **{player2}** inside a massive block of gelatin, leaving them completely stuck! 🍮",
-      "**{player1}** rolled a giant, heavy jawbreaker down a ramp, flattening **{player2}** instantly! 🔴",
-      "**{player1}** over-seasoned **{player2}**'s meal, causing them to sneeze so hard they flew out of bounds! 🫙",
-      "**{player1}** used a giant fork like a catapult to launch **{player2}** into orbit! 🍴",
-      "**{player1}** hypnotized **{player2}** with a perfectly glazed, swirling Cinnabon and led them off a ledge! 🌀",
-      "**{player1}** unleased a swarm of hungry cartoon mice to steal all of **{player2}**'s armor, forcing a retreat! 🧀",
-      "**{player1}** trapped **{player2}** inside a giant toaster and set it to 'Extra Crispy'! 🍞",
-      "**{player1}** popped a giant bubblegum bubble right next to **{player2}**, blowing them completely away! 🫧"
+      "**{player1}** knocked out **{player2}** cold using a rock-hard, stale baguette! 🥖"
     ];
 
     while (survivors.length > 1) {
@@ -249,13 +241,14 @@ module.exports = {
         }
 
         let p1Av = "", p2Av = "";
-        let u1 = null, u2 = null;
         try {
-          u1 = await client.users.fetch(player1);
-          u2 = await client.users.fetch(player2);
+          const u1 = await client.users.fetch(player1);
+          const u2 = await client.users.fetch(player2);
           p1Av = u1.displayAvatarURL({ extension: 'png', size: 256 });
           p2Av = u2.displayAvatarURL({ extension: 'png', size: 256 });
-        } catch(e){}
+        } catch(e){
+          console.error('[USER FETCH FOUT]: Kon avatars niet ophalen', e);
+        }
 
         let eventText = "";
         let buffer = null;
@@ -268,7 +261,7 @@ module.exports = {
           game.kills.set(player2, (game.kills.get(player2) || 0) + 1);
           pool.push(player2);
 
-          if (p2Av && p1Av) buffer = await drawVs(p2Av, p1Av);
+          buffer = await drawVs(p2Av, p1Av);
         } else {
           eventText = soloDeaths[Math.floor(Math.random() * soloDeaths.length)]
             .replace(/{player1}/g, `<@${player1}>`);
@@ -276,7 +269,7 @@ module.exports = {
           deadThisRound.add(player1);
           pool.push(player2);
 
-          if (p1Av) buffer = await drawSolo(p1Av);
+          buffer = await drawSolo(p1Av);
         }
 
         const embedEvent = new EmbedBuilder()
@@ -314,9 +307,13 @@ module.exports = {
     try {
       const u = await client.users.fetch(victor);
       const buf = await drawSolo(u.displayAvatarURL({ extension: 'png', size: 256 }));
-      const att = new AttachmentBuilder(buf, { name: 'victory.png' });
-      embedWinner.setImage('attachment://victory.png');
-      await channel.send({ embeds: [embedWinner], files: [att] });
+      if (buf) {
+        const att = new AttachmentBuilder(buf, { name: 'victory.png' });
+        embedWinner.setImage('attachment://victory.png');
+        await channel.send({ embeds: [embedWinner], files: [att] });
+      } else {
+        await channel.send({ embeds: [embedWinner] });
+      }
     } catch(e) {
       await channel.send({ embeds: [embedWinner] });
     }
