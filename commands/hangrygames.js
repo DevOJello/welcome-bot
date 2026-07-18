@@ -23,6 +23,20 @@ module.exports = {
     .addSubcommand(sub =>
       sub.setName('cancel')
         .setDescription('Cancel the current active Hangry Games session')
+    )
+    .addSubcommand(sub =>
+      sub.setName('giveaway')
+        .setDescription('Use giveaway mode with feasts off by default')
+        .addStringOption(opt => opt.setName('prize').setDescription('The prize for the giveaway').setRequired(true))
+        .addStringOption(opt => opt.setName('option1').setDescription('Optional parameter 1'))
+        .addStringOption(opt => opt.setName('option2').setDescription('Optional parameter 2'))
+        .addStringOption(opt => opt.setName('option3').setDescription('Optional parameter 3'))
+    )
+    .addSubcommand(sub =>
+      sub.setName('role')
+        .setDescription('Immediately start a Hangry Games with everyone in a role')
+        .addRoleOption(opt => opt.setName('targetrole').setDescription('The role containing the players').setRequired(true))
+        .addStringOption(opt => opt.setName('prize').setDescription('The prize for this round (optional)'))
     ),
 
   async execute(interaction, client) {
@@ -41,15 +55,42 @@ module.exports = {
       return interaction.reply({ content: '❌ A Hangry Games session is already active on this server!', flags: 64 });
     }
 
-    const prize = interaction.options.getString('prize') || 'Eternal Glory 🏆';
+    let prize = interaction.options.getString('prize') || 'Eternal Glory 🏆';
+    let startingPlayers = new Set();
+    let isInstantStart = false;
 
-    activeGames.set(guildId, {
+    if (sub === 'role') {
+      const role = interaction.options.getRole('targetrole');
+      const members = role.members.filter(member => !member.user.bot);
+      
+      if (members.size < 2) {
+        return interaction.reply({ content: `❌ There are not enough members (minimum 2) with the role ${role} to start a game!`, flags: 64 });
+      }
+
+      members.forEach(member => startingPlayers.add(member.id));
+      isInstantStart = true;
+    }
+
+    const gameData = {
       hostId: interaction.user.id,
       prize: prize,
-      players: new Set(),
+      players: startingPlayers,
       kills: new Map(),
-      status: 'lobby'
-    });
+      status: 'lobby',
+      isGiveaway: (sub === 'giveaway')
+    };
+
+    if (isInstantStart) {
+      startingPlayers.forEach(id => gameData.kills.set(id, 0));
+    }
+
+    activeGames.set(guildId, gameData);
+
+    if (isInstantStart) {
+      gameData.status = 'playing';
+      await interaction.reply({ content: `🎬 Direct start! Gathering everyone with the role... Let the battle begin!`, embeds: [], components: [] });
+      return module.exports.runGameSimulation(interaction, gameData, client);
+    }
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`hg_join_${guildId}`).setLabel('Join 🍔').setStyle(ButtonStyle.Success),
@@ -57,7 +98,7 @@ module.exports = {
     );
 
     const embed = new EmbedBuilder()
-      .setTitle(`🍔 Oscar's Hangry Games 🍔`)
+      .setTitle(sub === 'giveaway' ? `🎁 Oscar's Hangry Games (Giveaway Mode) 🎁` : `🍔 Oscar's Hangry Games 🍔`)
       .setColor(0xFEE75C)
       .setDescription(`Click **Join** 🍔 to enter the arena and fight for survival!\n\n🎁 **Prize:** ${prize}`)
       .setFooter({ text: 'Only the host can start the game.' });
@@ -112,7 +153,6 @@ module.exports = {
 
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    // Image rendering helpers
     async function drawSolo(avatarUrl) {
       const canvas = createCanvas(1000, 1000);
       const ctx = canvas.getContext('2d');
@@ -133,8 +173,8 @@ module.exports = {
       return canvas.toBuffer('image/png');
     }
 
-    // English action scenarios (Guaranteed eliminations)
     const soloDeaths = [
+      "**{player1}** went to take a relaxing shower, but a rogue rubber duck bit their leg, causing them to trip and drown in the tub! 🦆🛁",
       "**{player1}** choked on an incredibly dry cracker because they forgot to drink water! 🥖",
       "**{player1}** slipped on a huge glob of mayonnaise and tumbled straight out of the arena! 🍟",
       "**{player1}** took a massive bite out of a radioactive pickle and couldn't survive the flavor explosion! 🥒",
@@ -192,8 +232,8 @@ module.exports = {
       while (pool.length > 1) {
         if (!activeGames.has(guildId)) return;
 
-        const player1 = pool.pop(); // The target being eliminated
-        const player2 = pool.pop(); // The victor or bystander surviving the step
+        const player1 = pool.pop();
+        const player2 = pool.pop();
 
         if (deadThisRound.has(player1) || deadThisRound.has(player2)) {
           if (!deadThisRound.has(player1)) pool.push(player1);
@@ -212,24 +252,21 @@ module.exports = {
         let embed = new EmbedBuilder().setColor(0xE74C3C);
         let buffer = null;
 
-        // 50% Combat vs 50% Solo event
         if (Math.random() < 0.5) {
-          // COMBAT: Player 2 eliminates Player 1
           embed.setDescription(combatEvents[Math.floor(Math.random() * combatEvents.length)]
             .replace(/{player1}/g, `<@${player2}>`).replace(/{player2}/g, `<@${player1}>`));
           
           deadThisRound.add(player1);
           game.kills.set(player2, (game.kills.get(player2) || 0) + 1);
-          pool.push(player2); // Winner returns to the active pool
+          pool.push(player2);
 
           if (p2Av && p1Av) buffer = await drawVs(p2Av, p1Av);
         } else {
-          // SOLO: Player 1 eliminates themselves
           embed.setDescription(soloDeaths[Math.floor(Math.random() * soloDeaths.length)]
             .replace(/{player1}/g, `<@${player1}>`));
           
           deadThisRound.add(player1);
-          pool.push(player2); // Bystander automatically advances safely
+          pool.push(player2);
 
           if (p1Av) buffer = await drawSolo(p1Av);
         }
@@ -251,12 +288,11 @@ module.exports = {
 
     if (!activeGames.has(guildId)) return;
 
-    // Victory Screen
     const victor = survivors[0];
     const kills = game.kills.get(victor) || 0;
 
     const endEmbed = new EmbedBuilder()
-      .setTitle('👑 WE HAVE A VICTOR! 👑')
+      .setTitle('👑 WE HAVE A WINNER! 👑')
       .setColor(0xFEE75C)
       .setDescription(`🏆 **Congratulations <@${victor}>!** 🏆\n\nYou outlasted everyone and survived the arena!\n\n💀 Kills: **${kills}**\n🎁 Prize: **${game.prize}**`);
 
