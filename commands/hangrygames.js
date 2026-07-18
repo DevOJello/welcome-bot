@@ -60,15 +60,27 @@ module.exports = {
     let isInstantStart = false;
 
     if (sub === 'role') {
-      const role = interaction.options.getRole('targetrole');
-      const members = role.members.filter(member => !member.user.bot);
-      
-      if (members.size < 2) {
-        return interaction.reply({ content: `❌ There are not enough members (minimum 2) with the role ${role} to start a game!`, flags: 64 });
-      }
+      // Stuur een snelle denk-status omdat fetch() even tijd kan kosten
+      await interaction.deferReply();
 
-      members.forEach(member => startingPlayers.add(member.id));
-      isInstantStart = true;
+      const role = interaction.options.getRole('targetrole');
+      
+      try {
+        // Haal alle serverleden geforceerd op zodat de cache compleet is
+        await interaction.guild.members.fetch();
+        
+        const members = role.members.filter(member => !member.user.bot);
+        
+        if (members.size < 2) {
+          return interaction.editReply({ content: `❌ There are not enough members (minimum 2) with the role ${role} to start a game!` });
+        }
+
+        members.forEach(member => startingPlayers.add(member.id));
+        isInstantStart = true;
+      } catch (error) {
+        console.error(error);
+        return interaction.editReply({ content: '❌ Something went wrong while fetching the members of this role. Make sure the GuildMembers Intent is enabled in your Discord Developer Portal!' });
+      }
     }
 
     const gameData = {
@@ -88,7 +100,7 @@ module.exports = {
 
     if (isInstantStart) {
       gameData.status = 'playing';
-      await interaction.reply({ content: `🎬 Direct start! Gathering everyone with the role... Let the battle begin!`, embeds: [], components: [] });
+      await interaction.editReply({ content: `🎬 Direct start! Gathering everyone with the role... Let the battle begin!`, embeds: [], components: [] });
       return module.exports.runGameSimulation(interaction, gameData, client);
     }
 
@@ -249,21 +261,21 @@ module.exports = {
           p2Av = u2.displayAvatarURL({ extension: 'png', size: 256 });
         } catch(e){}
 
-        let embed = new EmbedBuilder().setColor(0xE74C3C);
+        let eventText = "";
         let buffer = null;
 
         if (Math.random() < 0.5) {
-          embed.setDescription(combatEvents[Math.floor(Math.random() * combatEvents.length)]
-            .replace(/{player1}/g, `<@${player2}>`).replace(/{player2}/g, `<@${player1}>`));
+          eventText = combatEvents[Math.floor(Math.random() * combatEvents.length)]
+            .replace(/{player1}/g, `<@${player2}>`).replace(/{player2}/g, `<@${player1}>`);
           
           deadThisRound.add(player1);
-          game.kills.set(player2, (game.kills.get(player2) || 0) + 1);
+          game.kills.set(player2, (game.kills.get(game.kills.get(player2) || 0) + 1));
           pool.push(player2);
 
           if (p2Av && p1Av) buffer = await drawVs(p2Av, p1Av);
         } else {
-          embed.setDescription(soloDeaths[Math.floor(Math.random() * soloDeaths.length)]
-            .replace(/{player1}/g, `<@${player1}>`));
+          eventText = soloDeaths[Math.floor(Math.random() * soloDeaths.length)]
+            .replace(/{player1}/g, `<@${player1}>`);
           
           deadThisRound.add(player1);
           pool.push(player2);
@@ -271,10 +283,9 @@ module.exports = {
           if (p1Av) buffer = await drawSolo(p1Av);
         }
 
-        const msgOptions = { embeds: [embed] };
+        const msgOptions = { content: `\n${eventText}` };
         if (buffer) {
           const att = new AttachmentBuilder(buffer, { name: 'event.png' });
-          embed.setImage('attachment://event.png');
           msgOptions.files = [att];
         }
 
@@ -291,19 +302,15 @@ module.exports = {
     const victor = survivors[0];
     const kills = game.kills.get(victor) || 0;
 
-    const endEmbed = new EmbedBuilder()
-      .setTitle('👑 WE HAVE A WINNER! 👑')
-      .setColor(0xFEE75C)
-      .setDescription(`🏆 **Congratulations <@${victor}>!** 🏆\n\nYou outlasted everyone and survived the arena!\n\n💀 Kills: **${kills}**\n🎁 Prize: **${game.prize}**`);
+    const endText = `👑 **WE HAVE A WINNER!** 👑\n\n🏆 **Congratulations <@${victor}>!** 🏆\n\nYou outlasted everyone and survived the arena!\n\n💀 Kills: **${kills}**\n🎁 Prize: **${game.prize}**`;
 
     try {
       const u = await client.users.fetch(victor);
       const buf = await drawSolo(u.displayAvatarURL({ extension: 'png', size: 256 }));
       const att = new AttachmentBuilder(buf, { name: 'victory.png' });
-      endEmbed.setImage('attachment://victory.png');
-      await channel.send({ content: `🎉 Celebration time <@${victor}>!`, embeds: [endEmbed], files: [att] });
+      await channel.send({ content: `🎉 Celebration time <@${victor}>!\n\n${endText}`, files: [att] });
     } catch(e) {
-      await channel.send({ content: `🎉 Celebration time <@${victor}>!`, embeds: [endEmbed] });
+      await channel.send({ content: `🎉 Celebration time <@${victor}>!\n\n${endText}` });
     }
 
     activeGames.delete(guildId);
