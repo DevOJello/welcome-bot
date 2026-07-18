@@ -164,7 +164,9 @@ module.exports = {
     async function drawSolo(avatarUrl) {
       const canvas = createCanvas(1000, 1000);
       const ctx = canvas.getContext('2d');
-      if (fs.existsSync(soloTemplatePath)) ctx.drawImage(await loadImage(soloTemplatePath), 0, 0, 1000, 1000);
+      if (fs.existsSync(soloTemplatePath)) {
+        ctx.drawImage(await loadImage(soloTemplatePath), 0, 0, 1000, 1000);
+      }
       try { ctx.drawImage(await loadImage(avatarUrl), 268, 290, 465, 465); } catch(e){}
       return canvas.toBuffer('image/png');
     }
@@ -172,11 +174,15 @@ module.exports = {
     async function drawVs(winUrl, loseUrl) {
       const canvas = createCanvas(1000, 600);
       const ctx = canvas.getContext('2d');
-      if (fs.existsSync(vsTemplatePath)) ctx.drawImage(await loadImage(vsTemplatePath), 0, 0, 1000, 600);
+      if (fs.existsSync(vsTemplatePath)) {
+        ctx.drawImage(await loadImage(vsTemplatePath), 0, 0, 1000, 600);
+      }
       try { ctx.drawImage(await loadImage(winUrl), 80, 100, 320, 320); } catch(e){}
       try {
         ctx.drawImage(await loadImage(loseUrl), 600, 100, 320, 320);
-        if (fs.existsSync(skullPath)) ctx.drawImage(await loadImage(skullPath), 0, 0, 1000, 600);
+        if (fs.existsSync(skullPath)) {
+          ctx.drawImage(await loadImage(skullPath), 0, 0, 1000, 600);
+        }
       } catch(e){}
       return canvas.toBuffer('image/png');
     }
@@ -243,9 +249,10 @@ module.exports = {
         }
 
         let p1Av = "", p2Av = "";
+        let u1 = null, u2 = null;
         try {
-          const u1 = await client.users.fetch(player1);
-          const u2 = await client.users.fetch(player2);
+          u1 = await client.users.fetch(player1);
+          u2 = await client.users.fetch(player2);
           p1Av = u1.displayAvatarURL({ extension: 'png', size: 256 });
           p2Av = u2.displayAvatarURL({ extension: 'png', size: 256 });
         } catch(e){}
@@ -272,9 +279,15 @@ module.exports = {
           if (p1Av) buffer = await drawSolo(p1Av);
         }
 
-        const msgOptions = { content: `${eventText}\n` };
+        const embedEvent = new EmbedBuilder()
+          .setColor(0xE74C3C)
+          .setDescription(eventText);
+
+        const msgOptions = { embeds: [embedEvent] };
+
         if (buffer) {
           const att = new AttachmentBuilder(buffer, { name: 'event.png' });
+          embedEvent.setImage('attachment://event.png');
           msgOptions.files = [att];
         }
 
@@ -291,15 +304,21 @@ module.exports = {
     const victor = survivors[0];
     const kills = game.kills.get(victor) || 0;
 
-    const endText = `👑 **WE HAVE A WINNER!** 👑\n\n🏆 **Congratulations <@${victor}>!** 🏆\n\nYou outlasted everyone and survived the arena!\n\n💀 Kills: **${kills}**\n🎁 Prize: **${game.prize}**`;
+    const endText = `🏆 **Congratulations <@${victor}>!** 🏆\n\nYou outlasted everyone and survived the arena!\n\n💀 Kills: **${kills}**\n🎁 Prize: **${game.prize}**`;
+
+    const embedWinner = new EmbedBuilder()
+      .setTitle(`👑 WE HAVE A WINNER! 👑`)
+      .setColor(0x2ECC71)
+      .setDescription(endText);
 
     try {
       const u = await client.users.fetch(victor);
       const buf = await drawSolo(u.displayAvatarURL({ extension: 'png', size: 256 }));
       const att = new AttachmentBuilder(buf, { name: 'victory.png' });
-      await channel.send({ content: `🎉 Celebration time <@${victor}>!\n\n${endText}`, files: [att] });
+      embedWinner.setImage('attachment://victory.png');
+      await channel.send({ embeds: [embedWinner], files: [att] });
     } catch(e) {
-      await channel.send({ content: `🎉 Celebration time <@${victor}>!\n\n${endText}` });
+      await channel.send({ embeds: [embedWinner] });
     }
 
     activeGames.delete(guildId);
