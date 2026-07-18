@@ -60,15 +60,11 @@ module.exports = {
     let isInstantStart = false;
 
     if (sub === 'role') {
-      // Stuur een snelle denk-status omdat fetch() even tijd kan kosten
       await interaction.deferReply();
-
       const role = interaction.options.getRole('targetrole');
       
       try {
-        // Haal alle serverleden geforceerd op zodat de cache compleet is
         await interaction.guild.members.fetch();
-        
         const members = role.members.filter(member => !member.user.bot);
         
         if (members.size < 2) {
@@ -231,13 +227,6 @@ module.exports = {
     while (survivors.length > 1) {
       if (!activeGames.has(guildId)) return;
 
-      const roundEmbed = new EmbedBuilder()
-        .setTitle(`🥞 Round ${round} 🥞`)
-        .setColor(0x3498DB)
-        .setDescription(`**${survivors.length} tributes remaining** inside the arena...`);
-      await channel.send({ embeds: [roundEmbed] });
-      await sleep(4000);
-
       let pool = [...survivors].sort(() => Math.random() - 0.5);
       const deadThisRound = new Set();
 
@@ -269,7 +258,7 @@ module.exports = {
             .replace(/{player1}/g, `<@${player2}>`).replace(/{player2}/g, `<@${player1}>`);
           
           deadThisRound.add(player1);
-          game.kills.set(player2, (game.kills.get(game.kills.get(player2) || 0) + 1));
+          game.kills.set(player2, (game.kills.get(player2) || 0) + 1);
           pool.push(player2);
 
           if (p2Av && p1Av) buffer = await drawVs(p2Av, p1Av);
@@ -283,7 +272,7 @@ module.exports = {
           if (p1Av) buffer = await drawSolo(p1Av);
         }
 
-        const msgOptions = { content: `\n${eventText}` };
+        const msgOptions = { content: `${eventText}\n` };
         if (buffer) {
           const att = new AttachmentBuilder(buffer, { name: 'event.png' });
           msgOptions.files = [att];
