@@ -144,7 +144,7 @@ module.exports = {
       if (game.players.size < 2) return interaction.reply({ content: '❌ You need at least **2 tributes** to start!', flags: 64 });
 
       game.status = 'playing';
-      await interaction.update({ content: '⚙️ *Starting engines... Preparing a pure carnage match...*', embeds: [], components: [] });
+      await interaction.update({ content: '⚙️ *Starting engines... Preparing a match...*', embeds: [], components: [] });
       module.exports.runGameSimulation(interaction, game);
     }
   },
@@ -193,7 +193,7 @@ module.exports = {
       embeds: [new EmbedBuilder()
         .setTitle('🏁 The Hangry Games Have Begun!')
         .setColor(0xED4245)
-        .setDescription(`**${survivors.length} tributes** step up to the dining table. There is no escaping... every event will take a life! 🪓`)
+        .setDescription(`**${survivors.length} tributes** step up to the dining table.`)
       ]
     });
     await sleep(4000);
@@ -206,7 +206,7 @@ module.exports = {
         embeds: [new EmbedBuilder()
           .setTitle(`🥞 Round ${round} 🥞`)
           .setColor(0xFEE75C)
-          .setDescription(`*The arena shrinks... No one is safe. Remaining tributes: ${survivors.length}*`)
+          .setDescription(`*The arena shrinks. Remaining tributes: ${survivors.length}*`)
         ]
       });
       await sleep(2500);
@@ -294,7 +294,7 @@ module.exports = {
       .setTitle('👑 We have a survivor! 👑')
       .setColor(0x57F287)
       .setDescription(`🏆 **CONGRATULATIONS <@${winnerId}>!** 🏆\n\nYou are the last one standing after an absolute bloodbath!\n\n🎁 **Prize:** ${game.prize}\n📣 **Sponsor:** ${sponsorText}`)
-      .setFooter({ text: "Thanks for playing Oscar's Pure Carnage Hangry Games!" });
+      .setFooter({ text: "Thanks for playing Oscar's Hangry Games!" });
 
     try {
       const winnerUser = await interaction.client.users.fetch(winnerId);
