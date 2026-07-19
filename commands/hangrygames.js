@@ -275,17 +275,53 @@ module.exports = {
     ];
 
 
-    // Safe (precies 2 of 1 persoon)
-    const safeEventsSolo = [
-      "**{player1}** hid inside a hollow giant cabbage to avoid getting spotted.",
-      "**{player1}** successfully defended their juicebox from an aggressive wild raccoon."
-    ];
+   // Safe (precies 1 persoon)
+  const safeEventsSolo = [
+  "**{player1}** hid inside a hollow giant cabbage to avoid getting spotted. 🥬",
+  "**{player1}** successfully defended their juicebox from an aggressive wild raccoon. 🧃",
+  "**{player1}** found a secret stash of fries and quietly enjoyed a peaceful meal. 🍟",
+  "**{player1}** climbed to the top of a giant burger and watched the chaos from above. 🍔",
+  "**{player1}** built a tiny fort out of cereal boxes and remained hidden all day. 📦",
+  "**{player1}** took a nap inside a giant watermelon and nobody noticed. 🍉",
+  "**{player1}** caught a flying donut and gained enough energy to survive another day. 🍩",
+  "**{player1}** found an abandoned picnic basket full of supplies. 🧺",
+  "**{player1}** scared away hungry pigeons by pretending to be a giant scarecrow. 🐦",
+  "**{player1}** successfully fished a golden fish cracker out of a river. 🎣",
+  "**{player1}** discovered a hidden snack bunker filled with cookies. 🍪",
+  "**{player1}** blended perfectly into a giant cornfield and stayed hidden. 🌽",
+  "**{player1}** found a magical milkshake that restored all their energy. 🥤",
+  "**{player1}** escaped danger by surfing away on a giant tortilla. 🌮",
+  "**{player1}** befriended a family of squirrels who warned them about nearby danger. 🐿️",
+  "**{player1}** accidentally found the safest corner of the arena and relaxed all day. 😌",
+  "**{player1}** won a hotdog eating contest against absolutely nobody. 🌭",
+  "**{player1}** located a secret underground pantry filled with supplies. 🥫",
+  "**{player1}** quietly roasted marshmallows while everyone else fought. 🔥",
+  "**{player1}** discovered a legendary spoon that brought incredible luck. 🥄"
+];
 
-    const safeEventsDuo = [
-      "**{player1}** and **{player2}** put aside their hunger and shared a giant pizza. Safe for now! 🍕",
-      "**{player1}** and **{player2}** had an intense staring contest over a cookie, but both survived."
-    ];
-
+// Safe (precies 2 personen)
+const safeEventsDuo = [
+  "**{player1}** and **{player2}** put aside their hunger and shared a giant pizza. Safe for now! 🍕",
+  "**{player1}** and **{player2}** had an intense staring contest over a cookie, but both survived. 🍪",
+  "**{player1}** and **{player2}** built a burger bunker together and stayed hidden. 🍔",
+  "**{player1}** and **{player2}** discovered a secret candy cave full of supplies. 🍬",
+  "**{player1}** and **{player2}** roasted marshmallows together while avoiding danger. 🔥",
+  "**{player1}** and **{player2}** teamed up to scare away a giant angry goose. 🪿",
+  "**{player1}** and **{player2}** found matching frying pans and agreed on a temporary truce. 🍳",
+  "**{player1}** and **{player2}** spent the day fishing instead of fighting. 🎣",
+  "**{player1}** and **{player2}** hid inside a giant refrigerator until the danger passed. 🧊",
+  "**{player1}** and **{player2}** cooked pancakes together and forgot they were supposed to fight. 🥞",
+  "**{player1}** and **{player2}** discovered a hidden snack warehouse packed with food. 📦",
+  "**{player1}** and **{player2}** challenged each other to Rock, Paper, Scissors. It ended in a draw. ✂️",
+  "**{player1}** and **{player2}** worked together to escape a collapsing food factory. 🏭",
+  "**{player1}** and **{player2}** crossed a river on a giant floating loaf of bread. 🍞",
+  "**{player1}** and **{player2}** found a magical popcorn machine that kept them fed all day. 🍿",
+  "**{player1}** and **{player2}** accidentally got locked inside a freezer and survived by cuddling for warmth. ❄️",
+  "**{player1}** and **{player2}** played an entire game of Uno instead of fighting. 🃏",
+  "**{player1}** and **{player2}** found a vending machine that never ran out of snacks. 🥤",
+  "**{player1}** and **{player2}** built a giant blanket fort and hid until sunset. 🏕️",
+  "**{player1}** and **{player2}** agreed on a temporary alliance over a shared plate of nachos. 🧀"
+];
     // Aankondiging start
     await channel.send({
       embeds: [new EmbedBuilder()
@@ -344,7 +380,7 @@ module.exports = {
           primaryUserId = player1; // We focussen de PFP thumbnail op de hoofdrolspeler (player 1)
           const rand = Math.random();
 
-          if (targetDeaths > deadThisRound.size && rand < 0.45) {
+          if (targetDeaths > deadThisRound.size && rand < 0.5) {
             // ELIMINATIE EVENT (1 of 2 spelers)
             if (Math.random() < 0.5) {
               // Player 2 elimineert Player 1 (2 spelers)
