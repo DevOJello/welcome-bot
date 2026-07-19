@@ -1,234 +1,236 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, AttachmentBuilder } = require('discord.js');
-const { createCanvas, loadImage } = require('@napi-rs/canvas');
-const fs = require('fs');
-const path = require('path');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
 
-// In-memory storage for active games per guild
+// Global in-memory storage for active games
 const activeGames = new Map();
-
-// File paths to your assets
-const soloTemplatePath = path.join(__dirname, '../images/burger_solo.png');
-const vsTemplatePath = path.join(__dirname, '../images/burger_vs.png');
-const skullPath = path.join(__dirname, '../images/skull.png');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('hangrygames')
-    .setDescription("Start a round of Oscar's Hangry Games!")
+    .setDescription('Play the ultimate Hangry Games battle royale minigame!')
+
+    // 1. /hangrygames new
     .addSubcommand(sub =>
       sub.setName('new')
-        .setDescription('Create a new Hangry Games lobby')
+        .setDescription('Start a new round of Hangry Games')
         .addStringOption(opt => opt.setName('prize').setDescription('The prize for this round (optional)'))
+        .addUserOption(opt => opt.setName('sponsor').setDescription('Sponsor of this round (optional)'))
     )
+
+    // 2. /hangrygames giveaway
     .addSubcommand(sub =>
-      sub.setName('cancel')
-        .setDescription('Cancel the current active Hangry Games session')
+      sub.setName('giveaway')
+        .setDescription('Start a Hangry Games giveaway with a custom prize')
+        .addStringOption(opt => opt.setName('prize').setDescription('The prize for this giveaway').setRequired(true))
+        .addUserOption(opt => opt.setName('sponsor').setDescription('Sponsor of the prize'))
     )
-    // Added subcommand for role-based game host
+
+    // 3. /hangrygames role
     .addSubcommand(sub =>
       sub.setName('role')
-        .setDescription('Host a Hangry Games for all members with a specific role')
-        .addStringOption(opt => 
-          opt.setName('role')
-            .setDescription('The role to host the game for')
-            .setRequired(true)
-        )
+        .setDescription('Immediately start a Hangry Games with everyone in a specific role')
+        .addRoleOption(opt => opt.setName('role').setDescription('The role to pull players from').setRequired(true))
+        .addStringOption(opt => opt.setName('prize').setDescription('The prize for this round (optional)'))
+        .addUserOption(opt => opt.setName('sponsor').setDescription('Sponsor of this round (optional)'))
+    )
+
+    // 4. /hangrygames cancel
+    .addSubcommand(sub =>
+      sub.setName('cancel')
+        .setDescription('Cancel the current active Hangry Games on this server')
     ),
 
   async execute(interaction, client) {
     const sub = interaction.options.getSubcommand();
     const guildId = interaction.guildId;
 
+    // ── CANCEL COMMAND ──────────────────────────────────────────────────────
     if (sub === 'cancel') {
       if (!activeGames.has(guildId)) {
         return interaction.reply({ content: '❌ There is no active Hangry Games session running on this server.', flags: 64 });
       }
+
       activeGames.delete(guildId);
-      return interaction.reply({ content: '🏁 The Hangry Games have been cancelled.' });
-    }
-
-    if (sub === 'role') {
-      // Handle hosting for a specific role
-      const roleName = interaction.options.getString('role');
-      const guild = interaction.guild;
-      const role = guild.roles.cache.find(r => r.name === roleName);
-      if (!role) {
-        return interaction.reply({ content: `Role "${roleName}" not found.`, ephemeral: true });
-      }
-      const membersWithRole = role.members;
-      if (membersWithRole.size === 0) {
-        return interaction.reply({ content: `No members found with the role "${roleName}".`, ephemeral: true });
-      }
-      const mentions = membersWithRole.map(member => `<@${member.id}>`).join(', ');
-      
-      // Send a notification mentioning all
-      await interaction.reply({ content: `🎮 Starting Hangry Games for role "${roleName}"! ${mentions}` });
-      
-      // Initialize a game session for these members
-      activeGames.set(guildId, {
-        hostId: interaction.user.id,
-        prize: 'Eternal Glory 🏆',
-        players: new Set(membersWithRole.map(m => m.id)),
-        kills: new Map(),
-        status: 'lobby',
-        startTime: null,
-        totalWins: new Map()
+      return interaction.reply({ 
+        embeds: [new EmbedBuilder()
+          .setColor(0xED4245)
+          .setDescription(`❌ **Hangry Games Cancelled!**\n\nThe session has been stopped by <@${interaction.user.id}>.`)
+        ] 
       });
-      
-      // Send the lobby embed with join/start buttons
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`hg_join_${guildId}`).setLabel('Join 🍔').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`hg_start_${guildId}`).setLabel('Start 🍴').setStyle(ButtonStyle.Primary)
-      );
-
-      const embed = new EmbedBuilder()
-        .setTitle(`🍔 Oscar's Hangry Games 🍔`)
-        .setColor(0xFEE75C)
-        .setDescription(`Click **Join** 🍔 to enter the arena and fight for survival!\n\n🎁 **Prize:** Eternal Glory 🏆`)
-        .setFooter({ text: 'Only the host can start the game.' });
-
-      await interaction.channel.send({ embeds: [embed], components: [row] });
-      return;
     }
 
-    // Existing 'new' subcommand logic
+    // Check if a game is already active
     if (activeGames.has(guildId)) {
       return interaction.reply({ content: '❌ A Hangry Games session is already active on this server!', flags: 64 });
     }
 
     const prize = interaction.options.getString('prize') || 'Eternal Glory 🏆';
+    const sponsor = interaction.options.getUser('sponsor');
 
-    activeGames.set(guildId, {
-      hostId: interaction.user.id,
-      prize: prize,
-      players: new Set(),
-      kills: new Map(),
-      status: 'lobby',
-      startTime: null,
-      totalWins: new Map()
-    });
+    // ── ROLE COMMAND (INSTANT START) ────────────────────────────────────────
+    if (sub === 'role') {
+      const role = interaction.options.getRole('role');
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`hg_join_${guildId}`).setLabel('Join 🍔').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`hg_start_${guildId}`).setLabel('Start 🍴').setStyle(ButtonStyle.Primary)
-    );
+      await interaction.deferReply();
 
-    const embed = new EmbedBuilder()
-      .setTitle(`🍔 Oscar's Hangry Games 🍔`)
-      .setColor(0xFEE75C)
-      .setDescription(`Click **Join** 🍔 to enter the arena and fight for survival!\n\n🎁 **Prize:** ${prize}`)
-      .setFooter({ text: 'Only the host can start the game.' });
+      try {
+        await interaction.guild.members.fetch();
+      } catch (err) {
+        console.error('Failed to fetch guild members:', err);
+      }
 
-    await interaction.reply({ embeds: [embed], components: [row] });
+      const membersWithRole = role.members.filter(member => !member.user.bot);
+
+      if (membersWithRole.size < 2) {
+        return interaction.editReply({ 
+          content: `❌ You need at least **2 human players** with the <@&${role.id}> role to start the Hangry Games!` 
+        });
+      }
+
+      const game = {
+        hostId: interaction.user.id,
+        prize: prize,
+        sponsorId: sponsor ? sponsor.id : null,
+        players: new Set(membersWithRole.map(member => member.id)),
+        status: 'playing'
+      };
+
+      activeGames.set(guildId, game);
+
+      await interaction.editReply({
+        content: `⚔️ **Instant Match Triggered!**\nGrabbing everyone with the <@&${role.id}> role (${membersWithRole.size} players)...`
+      });
+
+      return module.exports.runGameSimulation(interaction, game);
+    }
+
+    // ── STANDARD SETUP (new & giveaway) ────────────────────────────────────
+    if (sub === 'new' || sub === 'giveaway') {
+      activeGames.set(guildId, {
+        hostId: interaction.user.id,
+        prize: prize,
+        sponsorId: sponsor ? sponsor.id : null,
+        players: new Set(),
+        status: 'lobby'
+      });
+
+      const lobbyRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`hg_join_${guildId}`)
+          .setLabel('Join')
+          .setEmoji('🍔')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`hg_tributes_${guildId}`)
+          .setLabel('Tributes')
+          .setEmoji('⚔️')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(`hg_start_${guildId}`)
+          .setLabel('Start Game')
+          .setEmoji('🍴')
+          .setStyle(ButtonStyle.Primary)
+      );
+
+      const embed = new EmbedBuilder()
+        .setTitle(`🍔 Oscar's Hangry Games 🍔`)
+        .setColor(0xFEE75C)
+        .setDescription(`**Phase 1 - Gathering Tributes!**\n\nClick **Join** 🍔 to enter the arena and fight for survival!\n\n⚔️ **0 tributes have volunteered so far.**`)
+        .addFields(
+          { name: '🎁 Prize', value: prize, inline: true },
+          { name: '📣 Sponsor', value: sponsor ? `<@${sponsor.id}>` : `<@${interaction.user.id}>`, inline: true }
+        )
+        .setFooter({ text: 'Only the host or administrators can click Start.' });
+
+      await interaction.reply({ embeds: [embed], components: [lobbyRow] });
+    }
   },
 
+  // ── BUTTON LOGIC ENGINE ──────────────────────────────────────────────────
   async handleButton(interaction, client) {
+    const customId = interaction.customId;
     const guildId = interaction.guildId;
     const game = activeGames.get(guildId);
-    if (!game) return interaction.reply({ content: '❌ Game session not found.', flags: 64 });
 
-    if (interaction.customId === `hg_join_${guildId}`) {
-      if (game.players.has(interaction.user.id)) {
-        game.players.delete(interaction.user.id);
-        game.kills.delete(interaction.user.id);
-        await interaction.reply({ content: '🏃‍♂️ You backed out of the arena.', flags: 64 });
+    if (!game) {
+      return interaction.reply({ content: '❌ This Hangry Games session has already expired or been cancelled.', flags: 64 });
+    }
+
+    // BUTTON: JOIN / LEAVE
+    if (customId === `hg_join_${guildId}`) {
+      const userId = interaction.user.id;
+
+      if (game.players.has(userId)) {
+        game.players.delete(userId);
+        await interaction.reply({ content: '🏃‍♂️ You backed out of the Hangry Games.', flags: 64 });
       } else {
-        game.players.add(interaction.user.id);
-        game.kills.set(interaction.user.id, 0);
-        await interaction.reply({ content: '🍔 You have volunteered as a tribute! Good luck!', flags: 64 });
+        game.players.add(userId);
+        await interaction.reply({ content: '🍔 You have volunteered for the Hangry Games! Good luck!', flags: 64 });
       }
 
       const count = game.players.size;
+      const tributeStatusText = count === 1 
+        ? `⚔️ **1 tribute has volunteered so far.**` 
+        : `⚔️ **${count} tributes have volunteered so far.**`;
+
       const originalEmbed = interaction.message.embeds[0];
       const updatedEmbed = EmbedBuilder.from(originalEmbed)
-        .setDescription(`Click **Join** 🍔 to enter the arena and fight for survival!\n\n🎁 **Prize:** ${game.prize}\n\n⚔️ **${count} tributes have volunteered so far.**`);
+        .setDescription(`**Phase 1 - Gathering Tributes!**\n\nClick **Join** 🍔 to enter the arena and fight for survival!\n\n${tributeStatusText}`);
 
       await interaction.message.edit({ embeds: [updatedEmbed] });
     }
 
-    if (interaction.customId === `hg_start_${guildId}`) {
-      if (interaction.user.id !== game.hostId) {
-        return interaction.reply({ content: '⚠️ Only the host who started the lobby can begin the match.', flags: 64 });
+    // BUTTON: VIEW TRIBUTES
+    if (customId === `hg_tributes_${guildId}`) {
+      if (game.players.size === 0) {
+        return interaction.reply({ content: 'There are no tributes registered yet. Be the first to join! 🍔', flags: 64 });
       }
+
+      const playerMentions = Array.from(game.players).map(id => `<@${id}>`).join('\n');
+
+      const tributesEmbed = new EmbedBuilder()
+        .setTitle('⚔️ Registered Tributes')
+        .setColor(0x5865F2)
+        .setDescription(playerMentions);
+
+      await interaction.reply({ embeds: [tributesEmbed], flags: 64 });
+    }
+
+    // BUTTON: START GAME
+    if (customId === `hg_start_${guildId}`) {
+      const isHost = interaction.user.id === game.hostId;
+      const isStaff = interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers);
+
+      if (!isHost && !isStaff) {
+        return interaction.reply({ content: '⚠️ Only the host who started the game or staff members can begin the match.', flags: 64 });
+      }
+
       if (game.players.size < 2) {
         return interaction.reply({ content: '❌ You need at least **2 tributes** to start the Hangry Games!', flags: 64 });
       }
 
       game.status = 'playing';
-      game.startTime = Date.now();
 
-      await interaction.update({ content: '🎬 The tributes enter the arena... Let the battle begin!', embeds: [], components: [] });
-      
-      // Generate and send player list image
-      const playerListBuffer = await generatePlayerListImage(client, Array.from(game.players));
-      const att = new AttachmentBuilder(playerListBuffer, { name: 'playerlist.png' });
-      await interaction.channel.send({ content: '📝 Player list:', files: [att] });
-      
-      // Run game simulation
-      await module.exports.runGameSimulation(interaction, game, client);
+      await interaction.update({
+        content: '⚙️ *Starting engines... Cooking up unique events...*',
+        embeds: [],
+        components: []
+      });
+
+      module.exports.runGameSimulation(interaction, game);
     }
   },
 
-  async runGameSimulation(interaction, game, client) {
+  // ── GAME SIMULATION ENGINE ────────────────────────────────────────────────
+  async runGameSimulation(interaction, game) {
     const channel = interaction.channel;
     const guildId = interaction.guildId;
     let survivors = Array.from(game.players);
     let round = 1;
 
+
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    // Helper functions for images
-    async function drawSolo(avatarUrl) {
-      const canvas = createCanvas(1000, 1000);
-      const ctx = canvas.getContext('2d');
-      if (fs.existsSync(soloTemplatePath)) ctx.drawImage(await loadImage(soloTemplatePath), 0, 0, 1000, 1000);
-      try { ctx.drawImage(await loadImage(avatarUrl), 268, 290, 465, 465); } catch(e){}
-      return canvas.toBuffer('image/png');
-    }
-
-    async function drawVs(winUrl, loseUrl) {
-      const canvas = createCanvas(1000, 600);
-      const ctx = canvas.getContext('2d');
-      if (fs.existsSync(vsTemplatePath)) ctx.drawImage(await loadImage(vsTemplatePath), 0, 0, 1000, 600);
-      try { ctx.drawImage(await loadImage(winUrl), 80, 100, 320, 320); } catch(e){}
-      try {
-        ctx.drawImage(await loadImage(loseUrl), 600, 100, 320, 320);
-        if (fs.existsSync(skullPath)) ctx.drawImage(await loadImage(skullPath), 0, 0, 1000, 600);
-      } catch(e){}
-      return canvas.toBuffer('image/png');
-    }
-
-    // Generate player list image
-    async function generatePlayerListImage(client, playerIds) {
-      const width = 800;
-      const height = 200 + playerIds.length * 60;
-      const canvas = createCanvas(width, height);
-      const ctx = canvas.getContext('2d');
-
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, width, height);
-
-      ctx.font = '24px Arial';
-      ctx.fillStyle = '#000000';
-      ctx.fillText('Player List', 20, 40);
-
-      for (let i = 0; i < playerIds.length; i++) {
-        try {
-          const user = await client.users.fetch(playerIds[i]);
-          const avatarUrl = user.displayAvatarURL({ extension: 'png', size: 64 });
-          const avatar = await loadImage(avatarUrl);
-          ctx.drawImage(avatar, 20, 60 + i * 60, 50, 50);
-          ctx.font = '20px Arial';
-          ctx.fillStyle = '#000';
-          ctx.fillText(user.username, 80, 90 + i * 60);
-        } catch (e) {
-          ctx.fillText(`Player ${i + 1}`, 80, 90 + i * 60);
-        }
-      }
-      return canvas.toBuffer('image/png');
-    }
-
-    // English action scenarios (Guaranteed eliminations)
+    // Solo Accidents (1 persoon)
     const soloDeaths = [
       "**{player1}** choked on an incredibly dry cracker because they forgot to drink water! 🥖",
       "**{player1}** slipped on a huge glob of mayonnaise and tumbled straight out of the arena! 🍟",
@@ -250,8 +252,9 @@ module.exports = {
       "**{player1}** tried to sleep inside a giant taco shell, but got folded up and shipped away! 🌮"
     ];
 
+    // Combat (precies 2 personen)
     const combatEvents = [
-      "**{player1}** chopped **{player2}** into small pieces and turned them into a green bean casserole! 🍲",
+          "**{player1}** chopped **{player2}** into small pieces and turned them into a green bean casserole! 🍲",
       "**{player1}** threw a blazing hot slice of pizza directly at **{player2}**, forcing them out of the game! 🍕",
       "**{player1}** stole **{player2}**'s legendary golden french fry and eliminated them on the spot! 🍟",
       "**{player1}** knocked out **{player2}** cold using a rock-hard, stale baguette! 🥖",
@@ -271,109 +274,140 @@ module.exports = {
       "**{player1}** popped a giant bubblegum bubble right next to **{player2}**, blowing them completely away! 🫧"
     ];
 
+
+    // Safe (precies 2 of 1 persoon)
+    const safeEventsSolo = [
+      "**{player1}** hid inside a hollow giant cabbage to avoid getting spotted.",
+      "**{player1}** successfully defended their juicebox from an aggressive wild raccoon."
+    ];
+
+    const safeEventsDuo = [
+      "**{player1}** and **{player2}** put aside their hunger and shared a giant pizza. Safe for now! 🍕",
+      "**{player1}** and **{player2}** had an intense staring contest over a cookie, but both survived."
+    ];
+
+    // Aankondiging start
+    await channel.send({
+      embeds: [new EmbedBuilder()
+        .setTitle('🏁 The Hangry Games Have Begun!')
+        .setColor(0x5865F2)
+        .setDescription(`**${survivors.length} tributes** step up to the dining table. Who will eat, and who will get cooked?\n\nLet the game begin!`)
+      ]
+    });
+
+    await sleep(4000);
+
+    // Hoofd-loop van de rondes
     while (survivors.length > 1) {
+
       if (!activeGames.has(guildId)) return;
 
-      const roundEmbed = new EmbedBuilder()
-        .setTitle(`🥞 Round ${round} 🥞`)
-        .setColor(0x3498DB)
-        .setDescription(`**${survivors.length} tributes remaining** inside the arena...`);
-      await channel.send({ embeds: [roundEmbed] });
-      await sleep(4000);
+      // Aankondiging van de nieuwe ronde
+      await channel.send({
+        embeds: [new EmbedBuilder()
+          .setTitle(`🥞 Round ${round} 🥞`)
+          .setColor(0xFEE75C)
+          .setDescription(`*The arena shifts... Let's see what happens to our ${survivors.length} remaining tributes!*`)
+        ]
+      });
 
-      let pool = [...survivors].sort(() => Math.random() - 0.5);
+      await sleep(2500);
+
       const deadThisRound = new Set();
 
-      while (pool.length > 1) {
+
+      let targetDeaths = 1;
+      if (survivors.length > 8) targetDeaths = 3;
+      else if (survivors.length > 4) targetDeaths = 2;
+
+
+      let pool = [...survivors];
+      pool.sort(() => Math.random() - 0.5);
+
+      while (pool.length > 0) {
         if (!activeGames.has(guildId)) return;
 
-        const player1 = pool.pop(); // The target being eliminated
-        const player2 = pool.pop(); // The victor or bystander surviving the step
+        let embed = new EmbedBuilder().setColor(0x3498DB);
+        let eventText = "";
+        let primaryUserId = null;
 
-        if (deadThisRound.has(player1) || deadThisRound.has(player2)) {
-          if (!deadThisRound.has(player1)) pool.push(player1);
-          if (!deadThisRound.has(player2)) pool.push(player2);
-          continue;
-        }
-
-        let p1Av = "", p2Av = "";
-        try {
-          const u1 = await client.users.fetch(player1);
-          const u2 = await client.users.fetch(player2);
-          p1Av = u1.displayAvatarURL({ extension: 'png', size: 256 });
-          p2Av = u2.displayAvatarURL({ extension: 'png', size: 256 });
-        } catch(e){}
-
-        let embed = new EmbedBuilder().setColor(0xE74C3C);
-        let buffer = null;
-
-        // 50% Combat vs 50% Solo event
-        if (Math.random() < 0.5) {
-          // COMBAT: Player 2 eliminates Player 1
-          embed.setDescription(combatEvents[Math.floor(Math.random() * combatEvents.length)]
-            .replace(/{player1}/g, `<@${player2}>`).replace(/{player2}/g, `<@${player1}>`));
-          
-          deadThisRound.add(player1);
-          game.kills.set(player2, (game.kills.get(player2) || 0) + 1);
-          pool.push(player2); // Winner returns to the active pool
-
-          if (p2Av && p1Av) buffer = await drawVs(p2Av, p1Av);
+        // Als er nog maar 1 speler in de pool zit -> 1-persoon veilig event
+        if (pool.length === 1) {
+          const player = pool.pop();
+          primaryUserId = player;
+          eventText = safeEventsSolo[Math.floor(Math.random() * safeEventsSolo.length)]
+            .replace(/{player1}/g, `<@${player}>`);
         } else {
-          // SOLO: Player 1 eliminates themselves
-          embed.setDescription(soloDeaths[Math.floor(Math.random() * soloDeaths.length)]
-            .replace(/{player1}/g, `<@${player1}>`));
-          
-          deadThisRound.add(player1);
-          pool.push(player2); // Bystander automatically advances safely
+          // Pak 2 spelers
+          const player1 = pool.pop();
+          const player2 = pool.pop();
+          primaryUserId = player1; // We focussen de PFP thumbnail op de hoofdrolspeler (player 1)
+          const rand = Math.random();
 
-          if (p1Av) buffer = await drawSolo(p1Av);
+          if (targetDeaths > deadThisRound.size && rand < 0.45) {
+            // ELIMINATIE EVENT (1 of 2 spelers)
+            if (Math.random() < 0.5) {
+              // Player 2 elimineert Player 1 (2 spelers)
+              eventText = combatEvents[Math.floor(Math.random() * combatEvents.length)]
+                .replace(/{player1}/g, `<@${player1}>`)
+                .replace(/{player2}/g, `<@${player2}>`);
+              deadThisRound.add(player1);
+            } else {
+              // Solo dood voor Player 1 (1 speler). Player 2 stoppen we terug in de pool zodat hij later aan de beurt komt.
+              eventText = soloDeaths[Math.floor(Math.random() * soloDeaths.length)]
+                .replace(/{player1}/g, `<@${player1}>`);
+              deadThisRound.add(player1);
+              pool.push(player2);
+            }
+          } else {
+            // DUO VEILIG EVENT (2 spelers)
+            eventText = safeEventsDuo[Math.floor(Math.random() * safeEventsDuo.length)]
+              .replace(/{player1}/g, `<@${player1}>`)
+              .replace(/{player2}/g, `<@${player2}>`);
+          }
+        }
+        // Haal de Discord User op van de hoofdrolspeler om de Profielfoto (Avatar) te krijgen
+        try {
+          const user = await interaction.client.users.fetch(primaryUserId);
+          const avatarUrl = user.displayAvatarURL({ dynamic: true, size: 256 });
+          embed.setThumbnail(avatarUrl);
+        } catch (err) {
+          console.error("Kon avatar niet ophalen:", err);
         }
 
-        const msgOptions = { embeds: [embed] };
-        if (buffer) {
-          const att = new AttachmentBuilder(buffer, { name: 'event.png' });
-          embed.setImage('attachment://event.png');
-          msgOptions.files = [att];
-        }
-
-        await channel.send(msgOptions);
-        await sleep(4500);
+        embed.setDescription(eventText);
+        
+        // Verzend het individuele bericht direct in het kanaal
+        await channel.send({ embeds: [embed] });
+        await sleep(3500); // 3,5 seconden pauze tussen elk bericht voor de spanning!
       }
 
+      // Update overlevers
       survivors = survivors.filter(id => !deadThisRound.has(id));
       round++;
     }
 
     if (!activeGames.has(guildId)) return;
 
-    // Victory Screen
-    const victor = survivors[0];
-    const killsCount = game.kills.get(victor) || 0;
-    const timeSurvivedSeconds = Math.floor((Date.now() - game.startTime) / 1000);
-    const totalWins = game.totalWins.get(victor) || 0;
-    game.totalWins.set(victor, totalWins + 1);
+    // ── VICTORY ANNOUNCEMENT ────────────────────────────────────────────────
+    const winnerId = survivors[0];
+    const sponsorText = game.sponsorId ? `<@${game.sponsorId}>` : `<@${game.hostId}>`;
+    let winnerEmbed = new EmbedBuilder()
 
-    const endEmbed = new EmbedBuilder()
-      .setTitle('👑 WE HAVE A VICTOR! 👑')
-      .setColor(0xFEE75C)
-      .setDescription(
-        `🏆 **Congratulations <@${victor}>!** 🏆\n\n` +
-        `You outlasted everyone and survived the arena!\n\n` +
-        `💀 Kills: **${killsCount}**\n` +
-        `⏱️ Time Survived: **${Math.floor(timeSurvivedSeconds / 60)}m ${timeSurvivedSeconds % 60}s**\n` +
-        `🎁 Prize: **${game.prize}**\n` +
-        `🏆 Total Wins: **${game.totalWins.get(victor)}**`
-      );
+      .setTitle('👑 We have a winner! 👑')
+      .setColor(0x57F287)
+      .setDescription(`🏆 **CONGRATULATIONS <@${winnerId}>!** 🏆\n\nYou have outlasted everyone and survived the brutal tables of the Hangry Games!\n\n🎁 **Prize:** ${game.prize}\n📣 **Sponsor:** ${sponsorText}`)
+      .setFooter({ text: 'Thanks for playing Oscar\'s Hangry Games!' });
 
     try {
-      const u = await client.users.fetch(victor);
-      const buf = await drawSolo(u.displayAvatarURL({ extension: 'png', size: 256 }));
-      const att = new AttachmentBuilder(buf, { name: 'victory.png' });
-      endEmbed.setImage('attachment://victory.png');
-      await channel.send({ content: `🎉 Celebration time <@${victor}>!`, embeds: [endEmbed], files: [att] });
-    } catch(e) {
-      await channel.send({ content: `🎉 Celebration time <@${victor}>!`, embeds: [endEmbed] });
+      const winnerUser = await interaction.client.users.fetch(winnerId);
+      winnerEmbed.setThumbnail(winnerUser.displayAvatarURL({ dynamic: true, size: 512 }));
+    } catch (err) {
+      console.error("Kon winnaar avatar niet ophalen:", err);
     }
+
+    await channel.send({ content: `🎉 Congratulations <@${winnerId}>!`, embeds: [winnerEmbed] });
+
 
     activeGames.delete(guildId);
   }
