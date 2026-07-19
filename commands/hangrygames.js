@@ -6,7 +6,7 @@ const path = require('path');
 // In-memory storage for active games per guild
 const activeGames = new Map();
 
-// Paden op basis van jouw mappenstructuur
+// File paths to your assets
 const soloTemplatePath = path.join(__dirname, '../images/burger_solo.png');
 const vsTemplatePath = path.join(__dirname, '../images/burger_vs.png');
 const skullPath = path.join(__dirname, '../images/skull.png');
@@ -24,19 +24,15 @@ module.exports = {
       sub.setName('cancel')
         .setDescription('Cancel the current active Hangry Games session')
     )
-    .addSubcommand(sub =>
-      sub.setName('giveaway')
-        .setDescription('Use giveaway mode with feasts off by default')
-        .addStringOption(opt => opt.setName('prize').setDescription('The prize for the giveaway').setRequired(true))
-        .addStringOption(opt => opt.setName('option1').setDescription('Optional parameter 1'))
-        .addStringOption(opt => opt.setName('option2').setDescription('Optional parameter 2'))
-        .addStringOption(opt => opt.setName('option3').setDescription('Optional parameter 3'))
-    )
+    // Added subcommand for role-based game host
     .addSubcommand(sub =>
       sub.setName('role')
-        .setDescription('Immediately start a Hangry Games with everyone in a role')
-        .addRoleOption(opt => opt.setName('targetrole').setDescription('The role containing the players').setRequired(true))
-        .addStringOption(opt => opt.setName('prize').setDescription('The prize for this round (optional)'))
+        .setDescription('Host a Hangry Games for all members with a specific role')
+        .addStringOption(opt => 
+          opt.setName('role')
+            .setDescription('The role to host the game for')
+            .setRequired(true)
+        )
     ),
 
   async execute(interaction, client) {
@@ -51,54 +47,66 @@ module.exports = {
       return interaction.reply({ content: '🏁 The Hangry Games have been cancelled.' });
     }
 
+    if (sub === 'role') {
+      // Handle hosting for a specific role
+      const roleName = interaction.options.getString('role');
+      const guild = interaction.guild;
+      const role = guild.roles.cache.find(r => r.name === roleName);
+      if (!role) {
+        return interaction.reply({ content: `Role "${roleName}" not found.`, ephemeral: true });
+      }
+      const membersWithRole = role.members;
+      if (membersWithRole.size === 0) {
+        return interaction.reply({ content: `No members found with the role "${roleName}".`, ephemeral: true });
+      }
+      const mentions = membersWithRole.map(member => `<@${member.id}>`).join(', ');
+      
+      // Send a notification mentioning all
+      await interaction.reply({ content: `🎮 Starting Hangry Games for role "${roleName}"! ${mentions}` });
+      
+      // Initialize a game session for these members
+      activeGames.set(guildId, {
+        hostId: interaction.user.id,
+        prize: 'Eternal Glory 🏆',
+        players: new Set(membersWithRole.map(m => m.id)),
+        kills: new Map(),
+        status: 'lobby',
+        startTime: null,
+        totalWins: new Map()
+      });
+      
+      // Send the lobby embed with join/start buttons
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`hg_join_${guildId}`).setLabel('Join 🍔').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`hg_start_${guildId}`).setLabel('Start 🍴').setStyle(ButtonStyle.Primary)
+      );
+
+      const embed = new EmbedBuilder()
+        .setTitle(`🍔 Oscar's Hangry Games 🍔`)
+        .setColor(0xFEE75C)
+        .setDescription(`Click **Join** 🍔 to enter the arena and fight for survival!\n\n🎁 **Prize:** Eternal Glory 🏆`)
+        .setFooter({ text: 'Only the host can start the game.' });
+
+      await interaction.channel.send({ embeds: [embed], components: [row] });
+      return;
+    }
+
+    // Existing 'new' subcommand logic
     if (activeGames.has(guildId)) {
       return interaction.reply({ content: '❌ A Hangry Games session is already active on this server!', flags: 64 });
     }
 
-    let prize = interaction.options.getString('prize') || 'Eternal Glory 🏆';
-    let startingPlayers = new Set();
-    let isInstantStart = false;
+    const prize = interaction.options.getString('prize') || 'Eternal Glory 🏆';
 
-    if (sub === 'role') {
-      await interaction.deferReply();
-      const role = interaction.options.getRole('targetrole');
-      
-      try {
-        await interaction.guild.members.fetch();
-        const members = role.members.filter(member => !member.user.bot);
-        
-        if (members.size < 2) {
-          return interaction.editReply({ content: `❌ There are not enough members (minimum 2) with the role ${role} to start a game!` });
-        }
-
-        members.forEach(member => startingPlayers.add(member.id));
-        isInstantStart = true;
-      } catch (error) {
-        console.error(error);
-        return interaction.editReply({ content: '❌ Something went wrong while fetching the members of this role.' });
-      }
-    }
-
-    const gameData = {
+    activeGames.set(guildId, {
       hostId: interaction.user.id,
       prize: prize,
-      players: startingPlayers,
+      players: new Set(),
       kills: new Map(),
       status: 'lobby',
-      isGiveaway: (sub === 'giveaway')
-    };
-
-    if (isInstantStart) {
-      startingPlayers.forEach(id => gameData.kills.set(id, 0));
-    }
-
-    activeGames.set(guildId, gameData);
-
-    if (isInstantStart) {
-      gameData.status = 'playing';
-      await interaction.editReply({ content: `🎬 Direct start! Gathering everyone with the role... Let the battle begin!`, embeds: [], components: [] });
-      return module.exports.runGameSimulation(interaction, gameData, client);
-    }
+      startTime: null,
+      totalWins: new Map()
+    });
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`hg_join_${guildId}`).setLabel('Join 🍔').setStyle(ButtonStyle.Success),
@@ -106,7 +114,7 @@ module.exports = {
     );
 
     const embed = new EmbedBuilder()
-      .setTitle(sub === 'giveaway' ? `🎁 Oscar's Hangry Games (Giveaway Mode) 🎁` : `🍔 Oscar's Hangry Games 🍔`)
+      .setTitle(`🍔 Oscar's Hangry Games 🍔`)
       .setColor(0xFEE75C)
       .setDescription(`Click **Join** 🍔 to enter the arena and fight for survival!\n\n🎁 **Prize:** ${prize}`)
       .setFooter({ text: 'Only the host can start the game.' });
@@ -147,9 +155,17 @@ module.exports = {
       }
 
       game.status = 'playing';
+      game.startTime = Date.now();
+
       await interaction.update({ content: '🎬 The tributes enter the arena... Let the battle begin!', embeds: [], components: [] });
       
-      return module.exports.runGameSimulation(interaction, game, client);
+      // Generate and send player list image
+      const playerListBuffer = await generatePlayerListImage(client, Array.from(game.players));
+      const att = new AttachmentBuilder(playerListBuffer, { name: 'playerlist.png' });
+      await interaction.channel.send({ content: '📝 Player list:', files: [att] });
+      
+      // Run game simulation
+      await module.exports.runGameSimulation(interaction, game, client);
     }
   },
 
@@ -161,69 +177,109 @@ module.exports = {
 
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+    // Helper functions for images
     async function drawSolo(avatarUrl) {
-      try {
-        const canvas = createCanvas(1000, 1000);
-        const ctx = canvas.getContext('2d');
-        
-        if (fs.existsSync(soloTemplatePath)) {
-          ctx.drawImage(await loadImage(soloTemplatePath), 0, 0, 1000, 1000);
-        } else {
-          console.error(`[CANVAS FOUT] burger_solo.png niet gevonden op pad: ${soloTemplatePath}`);
-        }
-        
-        if (avatarUrl) {
-          const avImg = await loadImage(avatarUrl);
-          ctx.drawImage(avImg, 268, 290, 465, 465);
-        }
-        return canvas.toBuffer('image/png');
-      } catch (err) {
-        console.error('[CANVAS CRASH drawSolo]:', err);
-        return null;
-      }
+      const canvas = createCanvas(1000, 1000);
+      const ctx = canvas.getContext('2d');
+      if (fs.existsSync(soloTemplatePath)) ctx.drawImage(await loadImage(soloTemplatePath), 0, 0, 1000, 1000);
+      try { ctx.drawImage(await loadImage(avatarUrl), 268, 290, 465, 465); } catch(e){}
+      return canvas.toBuffer('image/png');
     }
 
     async function drawVs(winUrl, loseUrl) {
+      const canvas = createCanvas(1000, 600);
+      const ctx = canvas.getContext('2d');
+      if (fs.existsSync(vsTemplatePath)) ctx.drawImage(await loadImage(vsTemplatePath), 0, 0, 1000, 600);
+      try { ctx.drawImage(await loadImage(winUrl), 80, 100, 320, 320); } catch(e){}
       try {
-        const canvas = createCanvas(1000, 600);
-        const ctx = canvas.getContext('2d');
-        
-        if (fs.existsSync(vsTemplatePath)) {
-          ctx.drawImage(await loadImage(vsTemplatePath), 0, 0, 1000, 600);
-        } else {
-          console.error(`[CANVAS FOUT] burger_vs.png niet gevonden op pad: ${vsTemplatePath}`);
-        }
-        
-        if (winUrl) ctx.drawImage(await loadImage(winUrl), 80, 100, 320, 320);
-        if (loseUrl) ctx.drawImage(await loadImage(loseUrl), 600, 100, 320, 320);
-        
-        if (fs.existsSync(skullPath)) {
-          ctx.drawImage(await loadImage(skullPath), 0, 0, 1000, 600);
-        }
-        
-        return canvas.toBuffer('image/png');
-      } catch (err) {
-        console.error('[CANVAS CRASH drawVs]:', err);
-        return null;
-      }
+        ctx.drawImage(await loadImage(loseUrl), 600, 100, 320, 320);
+        if (fs.existsSync(skullPath)) ctx.drawImage(await loadImage(skullPath), 0, 0, 1000, 600);
+      } catch(e){}
+      return canvas.toBuffer('image/png');
     }
 
+    // Generate player list image
+    async function generatePlayerListImage(client, playerIds) {
+      const width = 800;
+      const height = 200 + playerIds.length * 60;
+      const canvas = createCanvas(width, height);
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.font = '24px Arial';
+      ctx.fillStyle = '#000000';
+      ctx.fillText('Player List', 20, 40);
+
+      for (let i = 0; i < playerIds.length; i++) {
+        try {
+          const user = await client.users.fetch(playerIds[i]);
+          const avatarUrl = user.displayAvatarURL({ extension: 'png', size: 64 });
+          const avatar = await loadImage(avatarUrl);
+          ctx.drawImage(avatar, 20, 60 + i * 60, 50, 50);
+          ctx.font = '20px Arial';
+          ctx.fillStyle = '#000';
+          ctx.fillText(user.username, 80, 90 + i * 60);
+        } catch (e) {
+          ctx.fillText(`Player ${i + 1}`, 80, 90 + i * 60);
+        }
+      }
+      return canvas.toBuffer('image/png');
+    }
+
+    // English action scenarios (Guaranteed eliminations)
     const soloDeaths = [
-      "**{player1}** went to take a relaxing shower, but a rogue rubber duck bit their leg, causing them to trip and drown in the tub! 🦆🛁",
       "**{player1}** choked on an incredibly dry cracker because they forgot to drink water! 🥖",
       "**{player1}** slipped on a huge glob of mayonnaise and tumbled straight out of the arena! 🍟",
-      "**{player1}** took a massive bite out of a radioactive pickle and couldn't survive the flavor explosion! 🥒"
+      "**{player1}** took a massive bite out of a radioactive pickle and couldn't survive the flavor explosion! 🥒",
+      "**{player1}** got a massive sugar rush from an energy drink and ran head-first out of bounds! ⚡",
+      "**{player1}** tried to open a stubborn jar of hot sauce, but it exploded right in their face! 🌶️",
+      "**{player1}** got trapped inside a giant, sticky cotton candy machine and couldn't break free! 🍭",
+      "**{player1}** mistook a super-powerful blender for a jacuzzi and got spun out of the game! 🌀",
+      "**{player1}** ate a slice of pizza that was way too cheesy and got completely tangled up in mozzarella! 🍕",
+      "**{player1}** tried to ride a giant rolling donut like a wheel, but lost balance and crashed hard! 🍩",
+      "**{player1}** accidentally drank an experimental soda that turned them entirely into carbonated bubbles! 🫧",
+      "**{player1}** reached for a snack but got sucked into a massive vending machine vortex! 🪙",
+      "**{player1}** tried to eat a soup that was way too hot and melted right through the arena floor! 🥣",
+      "**{player1}** got chased out of the arena by a rogue, sentient gingerbread man! 🫚",
+      "**{player1}** ate a mystery mushroom and floated away into outer space like a balloon! 🍄",
+      "**{player1}** accidentally tripped a trap and got buried under a massive avalanche of popcorn! 🍿",
+      "**{player1}** tried to double-dip a chip and was immediately blasted away by the Food Police! 👮‍♂️",
+      "**{player1}** bit into a jawbreaker that was so hard it shattered the space-time continuum, removing them from reality! 🍬",
+      "**{player1}** tried to sleep inside a giant taco shell, but got folded up and shipped away! 🌮"
     ];
 
     const combatEvents = [
       "**{player1}** chopped **{player2}** into small pieces and turned them into a green bean casserole! 🍲",
       "**{player1}** threw a blazing hot slice of pizza directly at **{player2}**, forcing them out of the game! 🍕",
       "**{player1}** stole **{player2}**'s legendary golden french fry and eliminated them on the spot! 🍟",
-      "**{player1}** knocked out **{player2}** cold using a rock-hard, stale baguette! 🥖"
+      "**{player1}** knocked out **{player2}** cold using a rock-hard, stale baguette! 🥖",
+      "**{player1}** covered the floor in slippery maple syrup, causing **{player2}** to slide right off the map! 🥞",
+      "**{player1}** aggressively pelted **{player2}** with stale meatballs until they surrendered! 🧆",
+      "**{player1}** trapped **{player2}** inside a giant waffle iron and pressed down the lid! 🧇",
+      "**{player1}** sprayed a mountain of whipped cream into **{player2}**'s eyes, blinding them into a pit! 🧁",
+      "**{player1}** challenged **{player2}** to a spicy chicken wing showdown, and **{player2}** couldn't take the heat! 🍗",
+      "**{player1}** used a high-pressure mustard bottle to blast **{player2}** straight out of the arena! 🌭",
+      "**{player1}** trapped **{player2}** inside a massive block of gelatin, leaving them completely stuck! 🍮",
+      "**{player1}** rolled a giant, heavy jawbreaker down a ramp, flattening **{player2}** instantly! 🔴",
+      "**{player1}** over-seasoned **{player2}**'s meal, causing them to sneeze so hard they flew out of bounds! 🫙",
+      "**{player1}** used a giant fork like a catapult to launch **{player2}** into orbit! 🍴",
+      "**{player1}** hypnotized **{player2}** with a perfectly glazed, swirling Cinnabon and led them off a ledge! 🌀",
+      "**{player1}** unleased a swarm of hungry cartoon mice to steal all of **{player2}**'s armor, forcing a retreat! 🧀",
+      "**{player1}** trapped **{player2}** inside a giant toaster and set it to 'Extra Crispy'! 🍞",
+      "**{player1}** popped a giant bubblegum bubble right next to **{player2}**, blowing them completely away! 🫧"
     ];
 
     while (survivors.length > 1) {
       if (!activeGames.has(guildId)) return;
+
+      const roundEmbed = new EmbedBuilder()
+        .setTitle(`🥞 Round ${round} 🥞`)
+        .setColor(0x3498DB)
+        .setDescription(`**${survivors.length} tributes remaining** inside the arena...`);
+      await channel.send({ embeds: [roundEmbed] });
+      await sleep(4000);
 
       let pool = [...survivors].sort(() => Math.random() - 0.5);
       const deadThisRound = new Set();
@@ -231,8 +287,8 @@ module.exports = {
       while (pool.length > 1) {
         if (!activeGames.has(guildId)) return;
 
-        const player1 = pool.pop();
-        const player2 = pool.pop();
+        const player1 = pool.pop(); // The target being eliminated
+        const player2 = pool.pop(); // The victor or bystander surviving the step
 
         if (deadThisRound.has(player1) || deadThisRound.has(player2)) {
           if (!deadThisRound.has(player1)) pool.push(player1);
@@ -246,41 +302,37 @@ module.exports = {
           const u2 = await client.users.fetch(player2);
           p1Av = u1.displayAvatarURL({ extension: 'png', size: 256 });
           p2Av = u2.displayAvatarURL({ extension: 'png', size: 256 });
-        } catch(e){
-          console.error('[USER FETCH FOUT]: Kon avatars niet ophalen', e);
-        }
+        } catch(e){}
 
-        let eventText = "";
+        let embed = new EmbedBuilder().setColor(0xE74C3C);
         let buffer = null;
 
+        // 50% Combat vs 50% Solo event
         if (Math.random() < 0.5) {
-          eventText = combatEvents[Math.floor(Math.random() * combatEvents.length)]
-            .replace(/{player1}/g, `<@${player2}>`).replace(/{player2}/g, `<@${player1}>`);
+          // COMBAT: Player 2 eliminates Player 1
+          embed.setDescription(combatEvents[Math.floor(Math.random() * combatEvents.length)]
+            .replace(/{player1}/g, `<@${player2}>`).replace(/{player2}/g, `<@${player1}>`));
           
           deadThisRound.add(player1);
           game.kills.set(player2, (game.kills.get(player2) || 0) + 1);
-          pool.push(player2);
+          pool.push(player2); // Winner returns to the active pool
 
-          buffer = await drawVs(p2Av, p1Av);
+          if (p2Av && p1Av) buffer = await drawVs(p2Av, p1Av);
         } else {
-          eventText = soloDeaths[Math.floor(Math.random() * soloDeaths.length)]
-            .replace(/{player1}/g, `<@${player1}>`);
+          // SOLO: Player 1 eliminates themselves
+          embed.setDescription(soloDeaths[Math.floor(Math.random() * soloDeaths.length)]
+            .replace(/{player1}/g, `<@${player1}>`));
           
           deadThisRound.add(player1);
-          pool.push(player2);
+          pool.push(player2); // Bystander automatically advances safely
 
-          buffer = await drawSolo(p1Av);
+          if (p1Av) buffer = await drawSolo(p1Av);
         }
 
-        const embedEvent = new EmbedBuilder()
-          .setColor(0xE74C3C)
-          .setDescription(eventText);
-
-        const msgOptions = { embeds: [embedEvent] };
-
+        const msgOptions = { embeds: [embed] };
         if (buffer) {
           const att = new AttachmentBuilder(buffer, { name: 'event.png' });
-          embedEvent.setImage('attachment://event.png');
+          embed.setImage('attachment://event.png');
           msgOptions.files = [att];
         }
 
@@ -294,28 +346,33 @@ module.exports = {
 
     if (!activeGames.has(guildId)) return;
 
+    // Victory Screen
     const victor = survivors[0];
-    const kills = game.kills.get(victor) || 0;
+    const killsCount = game.kills.get(victor) || 0;
+    const timeSurvivedSeconds = Math.floor((Date.now() - game.startTime) / 1000);
+    const totalWins = game.totalWins.get(victor) || 0;
+    game.totalWins.set(victor, totalWins + 1);
 
-    const endText = `🏆 **Congratulations <@${victor}>!** 🏆\n\nYou outlasted everyone and survived the arena!\n\n💀 Kills: **${kills}**\n🎁 Prize: **${game.prize}**`;
-
-    const embedWinner = new EmbedBuilder()
-      .setTitle(`👑 WE HAVE A WINNER! 👑`)
-      .setColor(0x2ECC71)
-      .setDescription(endText);
+    const endEmbed = new EmbedBuilder()
+      .setTitle('👑 WE HAVE A VICTOR! 👑')
+      .setColor(0xFEE75C)
+      .setDescription(
+        `🏆 **Congratulations <@${victor}>!** 🏆\n\n` +
+        `You outlasted everyone and survived the arena!\n\n` +
+        `💀 Kills: **${killsCount}**\n` +
+        `⏱️ Time Survived: **${Math.floor(timeSurvivedSeconds / 60)}m ${timeSurvivedSeconds % 60}s**\n` +
+        `🎁 Prize: **${game.prize}**\n` +
+        `🏆 Total Wins: **${game.totalWins.get(victor)}**`
+      );
 
     try {
       const u = await client.users.fetch(victor);
       const buf = await drawSolo(u.displayAvatarURL({ extension: 'png', size: 256 }));
-      if (buf) {
-        const att = new AttachmentBuilder(buf, { name: 'victory.png' });
-        embedWinner.setImage('attachment://victory.png');
-        await channel.send({ embeds: [embedWinner], files: [att] });
-      } else {
-        await channel.send({ embeds: [embedWinner] });
-      }
+      const att = new AttachmentBuilder(buf, { name: 'victory.png' });
+      endEmbed.setImage('attachment://victory.png');
+      await channel.send({ content: `🎉 Celebration time <@${victor}>!`, embeds: [endEmbed], files: [att] });
     } catch(e) {
-      await channel.send({ embeds: [embedWinner] });
+      await channel.send({ content: `🎉 Celebration time <@${victor}>!`, embeds: [endEmbed] });
     }
 
     activeGames.delete(guildId);
