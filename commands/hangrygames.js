@@ -178,7 +178,7 @@ module.exports = {
     const VOTE_COST = 150;
     const REQUIRED_VOTES_TO_SAVE = 3;
 
-    // --- EVENTS POOL (MASSIVELY EXPANDED & TRANSLATED TO ENGLISH) ---
+    // --- EVENTS POOL ---
     const soloDeaths = [
       "**{player1}** choked on an incredibly dry cracker! 🥖", 
       "**{player1}** slipped on a huge glob of mayonnaise and tumbled into the abyss! 🍟",
@@ -303,7 +303,6 @@ module.exports = {
     while (survivors.length > 1) {
       if (!activeGames.has(guildId)) return;
 
-      // ── SHOW SURVIVORS LIST AT START OF EVERY ROUND ──
       const listMentions = survivors.map(id => `• <@${id}>`).join('\n');
       await channel.send({
         embeds: [new EmbedBuilder()
@@ -321,7 +320,6 @@ module.exports = {
       while (pool.length > 0) {
         if (!activeGames.has(guildId)) return;
 
-        // Solo accident fail-safe if exactly 1 person remains in the round pool
         if (pool.length === 1) {
           const player = pool.pop();
           if (survivors.length - deadThisRound.size > 1) {
@@ -346,7 +344,7 @@ module.exports = {
 
         const randEvent = Math.random();
 
-        // 1. VOTING PHASE PHASE (30% Chance)
+        // 1. VOTING PHASE (30% Chance)
         if (randEvent < 0.30) {
           let u1Name = 'Player 1', u2Name = 'Player 2';
           try {
@@ -422,8 +420,9 @@ module.exports = {
               .setDescription(`**<@${winner}>** executed **<@${loser}>** because the voting goal was not reached!\n\n🪙 **<@${winner}> earns +${COINS_PER_KILL} Hangry Coins!**`);
             
             try {
+              // FIX VOOR VOTE: Pakt de profielfoto van de verliezer (degene die doodgaat)
               const deadUser = await interaction.client.users.fetch(loser);
-              resultEmbed.setThumbnail(deadUser.displayAvatarURL({ dynamic: true }));
+              resultEmbed.setThumbnail(deadUser.displayAvatarURL({ dynamic: true, size: 256 }));
             } catch(err){}
           }
 
@@ -431,7 +430,7 @@ module.exports = {
           await channel.send({ embeds: [resultEmbed] });
           await sleep(4000);
 
-        // 2. DUO SAFE EVENT (No one dies - 25% Chance)
+        // 2. DUO SAFE EVENT (25% Chance)
         } else if (randEvent < 0.55) {
           let embed = new EmbedBuilder().setColor(0x3498DB);
           const eventText = safeEventsDuo[Math.floor(Math.random() * safeEventsDuo.length)]
@@ -451,26 +450,29 @@ module.exports = {
           let embed = new EmbedBuilder().setColor(0xE74C3C);
           let eventText = "";
 
-          // 50/50 between combat (P1 kills P2) or solo accident (P1 dies)
           if (Math.random() < 0.5) {
+            // GEVECHT: Player1 vermoordt Player2
             eventText = combatEvents[Math.floor(Math.random() * combatEvents.length)]
               .replace(/{player1}/g, `<@${player1}>`).replace(/{player2}/g, `<@${player2}>`);
             deadThisRound.add(player2);
-            pool.push(player1); // Winner goes back into the pool
+            pool.push(player1);
 
             const currentBal = userBalances.get(player1) || 0;
             userBalances.set(player1, currentBal + COINS_PER_KILL);
             
             try {
-              const user = await interaction.client.users.fetch(player1);
-              embed.setThumbnail(user.displayAvatarURL({ dynamic: true, size: 256 }));
+              // FIX: Dit haalt nu specifiek de profielfoto van PLAYER 2 (het slachtoffer) op!
+              const victimUser = await interaction.client.users.fetch(player2);
+              embed.setThumbnail(victimUser.displayAvatarURL({ dynamic: true, size: 256 }));
             } catch (err) { console.error(err); }
           } else {
+            // ACCIDENT: Player1 gaat in z'n eentje dood
             eventText = soloDeaths[Math.floor(Math.random() * soloDeaths.length)].replace(/{player1}/g, `<@${player1}>`);
             deadThisRound.add(player1);
-            pool.push(player2); // P2 survives and goes back into pool
+            pool.push(player2);
 
             try {
+              // Hier gaat Player1 dood, dus z'n eigen pfp is correct
               const user = await interaction.client.users.fetch(player1);
               embed.setThumbnail(user.displayAvatarURL({ dynamic: true, size: 256 }));
             } catch (err) { console.error(err); }
