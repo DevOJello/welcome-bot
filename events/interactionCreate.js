@@ -1,25 +1,40 @@
 const { EmbedBuilder } = require('discord.js');
 
-// Server configuration IDs
+// Server configuration IDs for Verification
 const VERIFIED_ROLE_ID = '1523972825025745066'; 
 const MEMBER_ROLE_ID = '1511396122483228896'; 
-
-// Optional: Fill these in if you want to use the logging or unverified features
 const LOG_CHANNEL_ID = '1524391586295976097'; 
 const UNVERIFIED_ROLE_ID = '1523972756297744444'; 
 
 module.exports = {
     name: 'interactionCreate',
-    async execute(interaction) {
+    async execute(interaction, client) {
+        // We skippen alles wat geen knop is
         if (!interaction.isButton()) return;
 
-        if (interaction.customId === 'verify_button') {
+        const customId = interaction.customId;
+
+        // ── 1. GIVEAWAY BUTTON HANDLER ────────────────────────────────────────
+        if (customId.startsWith('giveaway_')) {
+            const giveawayCommand = client.commands.get('giveaway');
+            if (giveawayCommand && giveawayCommand.handleButton) {
+                try {
+                    return await giveawayCommand.handleButton(interaction, client);
+                } catch (err) {
+                    console.error('Error handling Giveaway button:', err);
+                }
+            }
+            return;
+        }
+
+        // ── 2. VERIFICATION BUTTON HANDLER ────────────────────────────────────
+        if (customId === 'verify_button') {
             const verifiedRole = interaction.guild.roles.cache.get(VERIFIED_ROLE_ID);
             const memberRole = interaction.guild.roles.cache.get(MEMBER_ROLE_ID);
             const unverifiedRole = interaction.guild.roles.cache.get(UNVERIFIED_ROLE_ID);
             const logChannel = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
 
-            // Safety check: ensure both main roles exist in the guild cache
+            // Safety check
             if (!verifiedRole || !memberRole) {
                 return interaction.reply({
                     content: '❌ **System Error:** The verification or member role could not be found. Please contact an Admin.',
@@ -27,7 +42,7 @@ module.exports = {
                 });
             }
 
-            // Check if the user already has both roles
+            // Check if already verified
             if (interaction.member.roles.cache.has(VERIFIED_ROLE_ID) && interaction.member.roles.cache.has(MEMBER_ROLE_ID)) {
                 return interaction.reply({
                     content: 'You are already verified and have the member role! 🎉',
@@ -36,15 +51,14 @@ module.exports = {
             }
 
             try {
-                // Add both roles simultaneously
+                // Add roles simultaneously
                 await interaction.member.roles.add([verifiedRole, memberRole]);
 
-                // Strip the unverified role if you're using it
+                // Strip unverified role if present
                 if (unverifiedRole && interaction.member.roles.cache.has(UNVERIFIED_ROLE_ID)) {
                     await interaction.member.roles.remove(unverifiedRole);
                 }
 
-                // Clean success pop-up for the user
                 const successEmbed = new EmbedBuilder()
                     .setTitle('✅ Access Granted!')
                     .setDescription('Your verification was successful. You have been given the **Verified** and **Member** roles!')
@@ -55,7 +69,7 @@ module.exports = {
                     ephemeral: true
                 });
 
-                // Drop a clean DM to welcome them
+                // Send DM
                 const dmEmbed = new EmbedBuilder()
                     .setTitle(`Welcome to ${interaction.guild.name}! 🎊`)
                     .setDescription('Thanks for verifying! You now have full access to the server channels. Have fun!')
@@ -65,7 +79,7 @@ module.exports = {
                     console.log(`Could not send DM to ${interaction.user.tag} because their DMs are closed.`);
                 });
 
-                // Send logs to your admin channel if configured
+                // Logging
                 if (logChannel) {
                     const logEmbed = new EmbedBuilder()
                         .setTitle('📥 New User Verified')
@@ -84,6 +98,14 @@ module.exports = {
 
             } catch (error) {
                 console.error('Verification Error:', error);
+                
+                if (interaction.replied || interaction.deferred) {
+                    return interaction.followUp({
+                        content: '⚠️ **Error:** Could not update your roles. Check role hierarchy!',
+                        ephemeral: true
+                    });
+                }
+                
                 await interaction.reply({
                     content: '⚠️ **Error:** Could not update your roles. Please ensure the bot\'s role is positioned *above* both the Verified and Member roles in the server settings.',
                     ephemeral: true
