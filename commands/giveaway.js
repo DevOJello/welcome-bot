@@ -45,19 +45,6 @@ function parseDuration(str) {
   return value * multipliers[unit];
 }
 
-function formatTimeLeft(endsAt) {
-  const ms = new Date(endsAt) - Date.now();
-  if (ms <= 0) return 'Ended';
-  const d = Math.floor(ms / 86400000);
-  const h = Math.floor((ms % 86400000) / 3600000);
-  const m = Math.floor((ms % 3600000) / 60000);
-  const s = Math.floor((ms % 60000) / 1000);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
-
 function buildGiveawayEmbed(giveaway, entryCount, ended = false, winners = []) {
   const embed = new EmbedBuilder()
     .setTitle(`🎉 ${giveaway.prize}`)
@@ -87,14 +74,12 @@ async function endGiveaway(giveawayId, client) {
 
   await pool.query(`UPDATE giveaways SET ended = TRUE WHERE id = $1`, [giveawayId]);
 
-  // Build weighted entry pool
   const { rows: entries } = await pool.query(`SELECT * FROM giveaway_entries WHERE giveaway_id = $1`, [giveawayId]);
   const pool2 = [];
   for (const entry of entries) {
     for (let i = 0; i < entry.entries; i++) pool2.push(entry.user_id);
   }
 
-  // Pick winners (no duplicates)
   const winners = [];
   const shuffled = pool2.sort(() => Math.random() - 0.5);
   const seen = new Set();
@@ -106,7 +91,6 @@ async function endGiveaway(giveawayId, client) {
     }
   }
 
-  // Update the original message
   try {
     const guild = await client.guilds.fetch(giveaway.guild_id);
     const channel = await guild.channels.fetch(giveaway.channel_id);
@@ -127,13 +111,13 @@ async function endGiveaway(giveawayId, client) {
   }
 }
 
-// ── Scheduler: check every 10 seconds for ended giveaways ───────────────────
+// Scheduler: controleert elke 10 seconden met een buffer van 5 seconden voor klokverschillen
 let schedulerClient = null;
 setInterval(async () => {
   if (!schedulerClient) return;
   try {
     const { rows } = await pool.query(`
-      SELECT id FROM giveaways WHERE ended = FALSE AND ends_at <= NOW()
+      SELECT id FROM giveaways WHERE ended = FALSE AND ends_at <= NOW() - INTERVAL '5 seconds'
     `);
     for (const row of rows) {
       await endGiveaway(row.id, schedulerClient);
@@ -148,7 +132,6 @@ module.exports = {
     .setName('giveaway')
     .setDescription('Giveaway system')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
-
     .addSubcommand(sub =>
       sub.setName('start')
         .setDescription('Start a giveaway')
@@ -157,41 +140,34 @@ module.exports = {
         .addIntegerOption(opt => opt.setName('winners').setDescription('Number of winners (default 1)').setRequired(false).setMinValue(1).setMaxValue(20))
         .addChannelOption(opt => opt.setName('channel').setDescription('Channel to post in (default: current)').setRequired(false))
     )
-
     .addSubcommand(sub =>
       sub.setName('end')
         .setDescription('End a giveaway early')
         .addStringOption(opt => opt.setName('message_id').setDescription('Message ID of the giveaway').setRequired(true))
     )
-
     .addSubcommand(sub =>
       sub.setName('reroll')
         .setDescription('Reroll the winners of an ended giveaway')
         .addStringOption(opt => opt.setName('message_id').setDescription('Message ID of the giveaway').setRequired(true))
     )
-
     .addSubcommand(sub =>
       sub.setName('bonus')
         .setDescription('Set bonus entries for a role')
         .addRoleOption(opt => opt.setName('role').setDescription('Role to give bonus entries').setRequired(true))
         .addIntegerOption(opt => opt.setName('entries').setDescription('Number of extra entries (0 to remove)').setRequired(true).setMinValue(0).setMaxValue(10))
     )
-
     .addSubcommand(sub =>
       sub.setName('bonuslist')
         .setDescription('View all bonus entry roles')
     ),
 
   async execute(interaction, client) {
-    // Store client reference for the scheduler
     schedulerClient = client;
-
     const guild = interaction.guild;
     if (!guild) return interaction.reply({ content: '⚠️ This command can only be used inside a server.', flags: 64 });
 
     const sub = interaction.options.getSubcommand();
 
-    // ── START ─────────────────────────────────────────────────────────────────
     if (sub === 'start') {
       const prize = interaction.options.getString('prize');
       const durationStr = interaction.options.getString('duration');
@@ -209,7 +185,6 @@ module.exports = {
       `, [guild.id, channel.id, prize, winnersCount, endsAt, interaction.user.id]);
 
       const giveaway = rows[0];
-
       const embed = buildGiveawayEmbed(giveaway, 0);
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -219,13 +194,11 @@ module.exports = {
       );
 
       const msg = await channel.send({ embeds: [embed], components: [row] });
-
       await pool.query(`UPDATE giveaways SET message_id = $1 WHERE id = $2`, [msg.id, giveaway.id]);
 
       return interaction.reply({ content: `✅ Giveaway started in <#${channel.id}>!`, flags: 64 });
     }
 
-    // ── END ───────────────────────────────────────────────────────────────────
     if (sub === 'end') {
       const messageId = interaction.options.getString('message_id');
       const { rows } = await pool.query(`SELECT * FROM giveaways WHERE message_id = $1 AND guild_id = $2`, [messageId, guild.id]);
@@ -236,7 +209,6 @@ module.exports = {
       return interaction.reply({ content: '✅ Giveaway ended!', flags: 64 });
     }
 
-    // ── REROLL ────────────────────────────────────────────────────────────────
     if (sub === 'reroll') {
       const messageId = interaction.options.getString('message_id');
       const { rows: gRows } = await pool.query(`SELECT * FROM giveaways WHERE message_id = $1 AND guild_id = $2`, [messageId, guild.id]);
@@ -263,7 +235,6 @@ module.exports = {
       });
     }
 
-    // ── BONUS ─────────────────────────────────────────────────────────────────
     if (sub === 'bonus') {
       const role = interaction.options.getRole('role');
       const entries = interaction.options.getInteger('entries');
@@ -286,7 +257,6 @@ module.exports = {
       });
     }
 
-    // ── BONUSLIST ─────────────────────────────────────────────────────────────
     if (sub === 'bonuslist') {
       const { rows } = await pool.query(`SELECT * FROM giveaway_bonus_roles WHERE guild_id = $1`, [guild.id]);
       if (rows.length === 0) return interaction.reply({ content: '📭 No bonus roles set up. Use `/giveaway bonus` to add some.', flags: 64 });
@@ -298,5 +268,54 @@ module.exports = {
           .setDescription(rows.map(r => `<@&${r.role_id}> — **+${r.bonus_entries}** ${r.bonus_entries === 1 ? 'entry' : 'entries'}`).join('\n'))]
       });
     }
+  },
+
+  // GECORRIGEERDE KNOP AFHANDELING
+  async handleButton(interaction) {
+    if (!interaction.customId.startsWith('giveaway_enter_')) return;
+
+    const giveawayId = parseInt(interaction.customId.split('_')[2]);
+    const { rows: gRows } = await pool.query(`SELECT * FROM giveaways WHERE id = $1`, [giveawayId]);
+    const giveaway = gRows[0];
+
+    if (!giveaway || giveaway.ended) {
+      return interaction.reply({ content: '❌ This giveaway has already expired or been cancelled.', flags: 64 });
+    }
+
+    const { rows: eRows } = await pool.query(
+      `SELECT * FROM giveaway_entries WHERE giveaway_id = $1 AND user_id = $2`,
+      [giveawayId, interaction.user.id]
+    );
+
+    if (eRows.length > 0) {
+      await pool.query(`DELETE FROM giveaway_entries WHERE giveaway_id = $1 AND user_id = $2`, [giveawayId, interaction.user.id]);
+      const { rows: countRows } = await pool.query(`SELECT SUM(entries) as total FROM giveaway_entries WHERE giveaway_id = $1`, [giveawayId]);
+      const totalEntries = countRows[0].total || 0;
+
+      const updatedEmbed = buildGiveawayEmbed(giveaway, totalEntries);
+      await interaction.message.edit({ embeds: [updatedEmbed] });
+      return interaction.reply({ content: '🏃‍♂️ You left the giveaway.', flags: 64 });
+    }
+
+    let totalEntries = 1;
+    const { rows: bonusRoles } = await pool.query(`SELECT * FROM giveaway_bonus_roles WHERE guild_id = $1`, [interaction.guild.id]);
+    for (const row of bonusRoles) {
+      if (interaction.member.roles.cache.has(row.role_id)) {
+        totalEntries += row.bonus_entries;
+      }
+    }
+
+    await pool.query(
+      `INSERT INTO giveaway_entries (giveaway_id, user_id, entries) VALUES ($1, $2, $3)`,
+      [giveawayId, interaction.user.id, totalEntries]
+    );
+
+    const { rows: countRows } = await pool.query(`SELECT SUM(entries) as total FROM giveaway_entries WHERE giveaway_id = $1`, [giveawayId]);
+    const totalEntriesCount = countRows[0].total || 0;
+
+    const updatedEmbed = buildGiveawayEmbed(giveaway, totalEntriesCount);
+    await interaction.message.edit({ embeds: [updatedEmbed] });
+
+    return interaction.reply({ content: `🎉 You have entered the giveaway with **${totalEntries}** ${totalEntries === 1 ? 'entry' : 'entries'}!`, flags: 64 });
   }
 };
