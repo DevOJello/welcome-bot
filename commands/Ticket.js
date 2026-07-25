@@ -377,6 +377,33 @@ module.exports = {
     schedulerClient = client;
     const guild = interaction.guild;
 
+    // ── CLAIM BUTTON ──────────────────────────────────────────────────────────
+    if (interaction.customId.startsWith('ticket_claim_btn_')) {
+      const channelId = interaction.customId.replace('ticket_claim_btn_', '');
+      const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id=$1 AND status='open'`, [channelId]);
+      if (!rows[0]) return interaction.reply({ content: '⚠️ This ticket is no longer active.', flags: 64 });
+      const ticket = rows[0];
+      if (ticket.claimed_by) return interaction.reply({ content: `⚠️ This ticket is already claimed by <@${ticket.claimed_by}>.`, flags: 64 });
+
+      await pool.query(`UPDATE tickets SET claimed_by=$1 WHERE id=$2`, [interaction.user.id, ticket.id]);
+
+      // Update the original ticket embed to show claimed status
+      const updatedCloseRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`ticket_close_btn_${channelId}`).setLabel('Close Ticket').setEmoji('🔒').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`ticket_claim_btn_${channelId}`).setLabel('Claimed ✓').setEmoji('🛡️').setStyle(ButtonStyle.Secondary).setDisabled(true),
+      );
+
+      try {
+        await interaction.message.edit({ components: [updatedCloseRow] });
+      } catch {}
+
+      return interaction.reply({
+        embeds: [new EmbedBuilder()
+          .setColor(0x00cc66)
+          .setDescription(`🛡️ <@${interaction.user.id}> has claimed this ticket!\n\nOther staff can relax — this one's covered.`)]
+      });
+    }
+
     // ── REOPEN ───────────────────────────────────────────────────────────────
     if (interaction.customId.startsWith('ticket_reopen_')) {
       const channelId = interaction.customId.replace('ticket_reopen_', '');
