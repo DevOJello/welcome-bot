@@ -480,13 +480,12 @@ module.exports = {
 
       // Update staff stats
       if (ticket.claimed_by) {
-        await pool.query(`
-          INSERT INTO staff_stats (user_id, guild_id, total_ratings, rating_sum)
-          VALUES ($1, $2, 1, $3)
-          ON CONFLICT (user_id, guild_id) DO UPDATE SET
-            total_ratings = staff_stats.total_ratings + 1,
-            rating_sum = staff_stats.rating_sum + $3
-        `, [ticket.claimed_by, ticket.guild_id, rating]);
+        try {
+          const { addRating } = require('./staffstats');
+          await addRating(ticket.claimed_by, ticket.guild_id, rating);
+        } catch (err) {
+          console.error('Failed to record rating in staff_stats:', err.message);
+        }
       }
 
       const stars = '⭐'.repeat(rating);
