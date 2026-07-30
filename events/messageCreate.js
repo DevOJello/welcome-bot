@@ -6,7 +6,7 @@ module.exports = {
     if (message.author.bot) return;
     if (!message.guild) return;
 
-    // Lazy-load afkUsers from the afk command
+    // Lazy-load afkUsers van de afk command
     let afkCommand;
     try {
       afkCommand = client.commands.get('afk');
@@ -27,11 +27,23 @@ module.exports = {
         ? `${Math.floor(elapsed / 60)}m`
         : `${Math.floor(elapsed / 3600)}h ${Math.floor((elapsed % 3600) / 60)}m`;
 
-      // Restore original nickname
+      // Restore nickname dynamically by stripping [AFK]
       try {
         const member = await message.guild.members.fetch(message.author.id);
-        await member.setNickname(data.originalNick === member.user.username ? null : data.originalNick);
-      } catch {}
+        
+        if (member.manageable) {
+          const cleanedNick = member.displayName.replace(/^\[AFK\]\s*/i, '');
+
+          // Discard server nickname if cleaned name matches global username
+          if (cleanedNick === member.user.username) {
+            await member.setNickname(null);
+          } else {
+            await member.setNickname(cleanedNick);
+          }
+        }
+      } catch (err) {
+        console.log(`Failed to reset AFK nickname for ${message.author.tag}`);
+      }
 
       try {
         const reply = await message.reply({
@@ -47,6 +59,9 @@ module.exports = {
     const mentionedAfk = message.mentions.users.filter(u => afkUsers.has(u.id));
 
     for (const [userId, afkData] of mentionedAfk) {
+      // Voorkom dat de bot replyt als je jezelf tagt
+      if (userId === message.author.id) continue;
+
       const elapsed = Math.floor((Date.now() - afkData.since) / 1000);
       const duration = elapsed < 60
         ? `${elapsed}s`
