@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, ChannelType, AttachmentBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, ChannelType, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const pool = require('../database');
 
 async function initDB() {
@@ -8,9 +8,12 @@ async function initDB() {
       category_id TEXT,
       transcript_channel_id TEXT,
       staff_role_id TEXT,
+      ticket_types JSONB DEFAULT '[]',
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  await pool.query(`ALTER TABLE ticket_config ADD COLUMN IF NOT EXISTS ticket_types JSONB DEFAULT '[]'`);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS tickets (
       id SERIAL PRIMARY KEY,
@@ -22,15 +25,20 @@ async function initDB() {
       closed_at TIMESTAMPTZ,
       closed_by TEXT,
       rating INTEGER,
+      rating_reason TEXT,
       rated_by TEXT,
+      ticket_type TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS claimed_by TEXT`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS closed_by TEXT`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS rating INTEGER`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS rating_reason TEXT`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS rated_by TEXT`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS ticket_type TEXT`);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS rating_blacklist (
       user_id TEXT NOT NULL,
@@ -40,7 +48,6 @@ async function initDB() {
       PRIMARY KEY (user_id, guild_id)
     )
   `);
-  // Add rating columns to staff_stats if they exist
   await pool.query(`ALTER TABLE staff_stats ADD COLUMN IF NOT EXISTS total_ratings INTEGER DEFAULT 0`).catch(() => {});
   await pool.query(`ALTER TABLE staff_stats ADD COLUMN IF NOT EXISTS rating_sum INTEGER DEFAULT 0`).catch(() => {});
 }
@@ -89,16 +96,22 @@ async function saveTranscriptAndDelete(channel, guild, ticket, closedById, clien
         try { closedByUser = await client.users.fetch(closedById || ticket.closed_by); } catch {}
         let claimedByUser;
         if (ticket.claimed_by) { try { claimedByUser = await client.users.fetch(ticket.claimed_by); } catch {} }
+
+        const ratingField = ticket.rating
+          ? `${'⭐'.repeat(ticket.rating)} (${ticket.rating}/5)${ticket.rating_reason ? `\n> ${ticket.rating_reason}` : ''}`
+          : '*No rating yet*';
+
         await transcriptChannel.send({
           embeds: [new EmbedBuilder()
             .setTitle('📋 Ticket Transcript')
             .setColor(0x5865f2)
             .addFields(
               { name: '🎫 Ticket', value: `#${channel.name}`, inline: true },
+              { name: '📂 Category', value: ticket.ticket_type || 'General', inline: true },
               { name: '👤 Opened by', value: `<@${ticket.user_id}>`, inline: true },
               { name: '🔒 Closed by', value: closedByUser ? `<@${closedByUser.id}>` : 'Unknown', inline: true },
               { name: '🛡️ Claimed by', value: claimedByUser ? `<@${claimedByUser.id}>` : '*Unclaimed*', inline: true },
-              { name: '⭐ Rating', value: ticket.rating ? `${'⭐'.repeat(ticket.rating)} (${ticket.rating}/5)` : '*No rating yet*', inline: true },
+              { name: '⭐ Rating', value: ratingField, inline: false },
               { name: '📅 Opened', value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:F>`, inline: true },
             )
             .setTimestamp()],
@@ -110,11 +123,9 @@ async function saveTranscriptAndDelete(channel, guild, ticket, closedById, clien
     }
   }
 
-  // DM the user for a rating if ticket was claimed
   if (ticket.claimed_by && ticket.user_id) {
     try {
       const ticketUser = await client.users.fetch(ticket.user_id);
-      // Check not blacklisted
       const { rows: bl } = await pool.query(`SELECT 1 FROM rating_blacklist WHERE user_id = $1 AND guild_id = $2`, [ticket.user_id, guild.id]);
       if (bl.length === 0) {
         const ratingRow = new ActionRowBuilder().addComponents(
@@ -130,14 +141,12 @@ async function saveTranscriptAndDelete(channel, guild, ticket, closedById, clien
             .setTitle('⭐ Rate your support experience')
             .setColor(0xffd700)
             .setDescription(`Your ticket in **${guild.name}** has been closed.\n\nHow would you rate the support you received from <@${ticket.claimed_by}>?\n\nClick a star rating below:`)
-            .setFooter({ text: 'Your feedback helps us improve!' })],
+            .setFooter({ text: 'Ratings below 3 stars will ask for a short explanation' })],
           components: [ratingRow]
         });
-        // Store ticket id in DB so we can find it from the button
         await pool.query(`UPDATE tickets SET status = 'awaiting_rating', closed_by = $1 WHERE id = $2`, [closedById, ticket.id]);
-        // Delete channel after short delay
         setTimeout(async () => { try { await channel.delete(); } catch {} }, 5000);
-        return; // Don't mark as deleted yet — wait for rating
+        return;
       }
     } catch (err) {
       console.error('Failed to DM rating request:', err.message);
@@ -184,26 +193,26 @@ module.exports = {
         .setDescription('Set up the ticket system')
         .addRoleOption(opt => opt.setName('staff_role').setDescription('Role that can see and manage tickets').setRequired(true))
         .addChannelOption(opt => opt.setName('transcript_channel').setDescription('Channel to save ticket transcripts').setRequired(true))
-        .addChannelOption(opt => opt.setName('category').setDescription('Category to create ticket channels in').setRequired(false))
+        .addChannelOption(opt => opt.setName('category').setDescription('Discord category to create ticket channels in').setRequired(false))
+    )
+    .addSubcommand(sub =>
+      sub.setName('types')
+        .setDescription('Set up to 5 ticket categories shown as buttons on the panel (e.g. General, Shop)')
+        .addStringOption(opt => opt.setName('type1').setDescription('e.g. 🎫 General Support').setRequired(true))
+        .addStringOption(opt => opt.setName('type2').setDescription('e.g. 🛒 Shop Support').setRequired(false))
+        .addStringOption(opt => opt.setName('type3').setDescription('Category 3').setRequired(false))
+        .addStringOption(opt => opt.setName('type4').setDescription('Category 4').setRequired(false))
+        .addStringOption(opt => opt.setName('type5').setDescription('Category 5').setRequired(false))
     )
     .addSubcommand(sub =>
       sub.setName('panel')
-        .setDescription('Send the ticket panel with a button to a channel')
+        .setDescription('Send the ticket panel with category buttons to a channel')
         .addChannelOption(opt => opt.setName('channel').setDescription('Channel to send the panel in').setRequired(true))
         .addStringOption(opt => opt.setName('message').setDescription('Custom message on the panel').setRequired(false))
     )
-    .addSubcommand(sub =>
-      sub.setName('close')
-        .setDescription('Close the current ticket')
-    )
-    .addSubcommand(sub =>
-      sub.setName('claim')
-        .setDescription('Claim this ticket as your responsibility')
-    )
-    .addSubcommand(sub =>
-      sub.setName('unclaim')
-        .setDescription('Unclaim this ticket')
-    )
+    .addSubcommand(sub => sub.setName('close').setDescription('Close the current ticket'))
+    .addSubcommand(sub => sub.setName('claim').setDescription('Claim this ticket as your responsibility'))
+    .addSubcommand(sub => sub.setName('unclaim').setDescription('Unclaim this ticket'))
     .addSubcommand(sub =>
       sub.setName('add')
         .setDescription('Add a user to the current ticket')
@@ -252,7 +261,28 @@ module.exports = {
             { name: '👥 Staff Role', value: `<@&${staffRole.id}>`, inline: true },
             { name: '📋 Transcript Channel', value: `<#${transcriptChannel.id}>`, inline: true },
             { name: '📁 Category', value: category ? category.name : 'Default', inline: true },
-          )]
+          )
+          .setFooter({ text: 'Use /ticket types next to set up ticket categories' })]
+      });
+    }
+
+    // ── TYPES ────────────────────────────────────────────────────────────────
+    if (sub === 'types') {
+      const types = ['type1', 'type2', 'type3', 'type4', 'type5']
+        .map(key => interaction.options.getString(key))
+        .filter(Boolean);
+
+      const config = await getConfig(guild.id);
+      if (!config) return interaction.reply({ content: '⚠️ Run `/ticket setup` first.', flags: 64 });
+
+      await pool.query(`UPDATE ticket_config SET ticket_types = $1, updated_at = NOW() WHERE guild_id = $2`, [JSON.stringify(types), guild.id]);
+
+      return interaction.reply({
+        embeds: [new EmbedBuilder()
+          .setTitle('✅ Ticket Categories Set')
+          .setColor(0x00cc66)
+          .setDescription(types.map((t, i) => `${i + 1}. ${t}`).join('\n'))
+          .setFooter({ text: 'Use /ticket panel to post the button panel' })]
       });
     }
 
@@ -261,12 +291,21 @@ module.exports = {
       const config = await getConfig(guild.id);
       if (!config) return interaction.reply({ content: '⚠️ Set up with `/ticket setup` first.', flags: 64 });
       const channel = interaction.options.getChannel('channel');
-      const message = interaction.options.getString('message') || 'Need help? Click the button below to open a support ticket.';
+      const message = interaction.options.getString('message') || 'Need help? Click a button below to open the right kind of support ticket.';
+
+      const types = (config.ticket_types && config.ticket_types.length > 0) ? config.ticket_types : ['🎫 General Support'];
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`ticket_create_${guild.id}`).setLabel('Open a Ticket').setEmoji('🎫').setStyle(ButtonStyle.Primary)
+        ...types.slice(0, 5).map((type, i) =>
+          new ButtonBuilder()
+            .setCustomId(`ticket_create_${guild.id}_${i}`)
+            .setLabel(type.slice(0, 80))
+            .setStyle(ButtonStyle.Primary)
+        )
       );
+
       await channel.send({
         embeds: [new EmbedBuilder().setTitle('🎫 Support Tickets').setColor(0x5865f2).setDescription(message)
+          .addFields({ name: '📂 Categories', value: types.map(t => `• ${t}`).join('\n') })
           .setFooter({ text: 'One ticket per person • Misuse may result in a ban' })],
         components: [row]
       });
@@ -299,7 +338,6 @@ module.exports = {
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id=$1 AND status='open'`, [interaction.channelId]);
       if (!rows[0]) return interaction.reply({ content: '⚠️ This is not an active ticket channel.', flags: 64 });
       const ticket = rows[0];
-      const config = await getConfig(guild.id);
       try { await interaction.channel.permissionOverwrites.edit(ticket.user_id, { ViewChannel: false }); } catch {}
       await pool.query(`UPDATE tickets SET status='closed', closed_at=NOW(), closed_by=$1 WHERE id=$2`, [interaction.user.id, ticket.id]);
       try {
@@ -358,27 +396,41 @@ module.exports = {
       const stats = statsRows[0] || { total_ratings: 0, rating_sum: 0 };
       const avg = stats.total_ratings > 0 ? (stats.rating_sum / stats.total_ratings).toFixed(2) : 'N/A';
       const stars = stats.total_ratings > 0 ? '⭐'.repeat(Math.round(stats.rating_sum / stats.total_ratings)) : 'No ratings yet';
-      return interaction.reply({
-        embeds: [new EmbedBuilder()
-          .setTitle(`⭐ Rating Stats — ${staff.username}`)
-          .setColor(0xffd700)
-          .setThumbnail(staff.displayAvatarURL({ extension: 'png' }))
-          .addFields(
-            { name: '⭐ Average Rating', value: `${avg}/5 ${stars}`, inline: true },
-            { name: '📊 Total Ratings', value: `${stats.total_ratings}`, inline: true },
-          )
-          .setTimestamp()]
-      });
+
+      // Pull recent low ratings with reasons for context
+      const { rows: lowRatings } = await pool.query(`
+        SELECT rating, rating_reason, created_at FROM tickets
+        WHERE claimed_by=$1 AND guild_id=$2 AND rating IS NOT NULL AND rating <= 2
+        ORDER BY created_at DESC LIMIT 3
+      `, [staff.id, guild.id]);
+
+      const embed = new EmbedBuilder()
+        .setTitle(`⭐ Rating Stats — ${staff.username}`)
+        .setColor(0xffd700)
+        .setThumbnail(staff.displayAvatarURL({ extension: 'png' }))
+        .addFields(
+          { name: '⭐ Average Rating', value: `${avg}/5 ${stars}`, inline: true },
+          { name: '📊 Total Ratings', value: `${stats.total_ratings}`, inline: true },
+        )
+        .setTimestamp();
+
+      if (lowRatings.length > 0) {
+        embed.addFields({
+          name: '⚠️ Recent Low Ratings',
+          value: lowRatings.map(r => `${'⭐'.repeat(r.rating)} — ${r.rating_reason || '*No reason given*'}`).join('\n\n')
+        });
+      }
+
+      return interaction.reply({ embeds: [embed] });
     }
   },
 
   async handleButton(interaction, client) {
-    if (!interaction.isButton()) return;
-    schedulerClient = client;
     const guild = interaction.guild;
+    schedulerClient = client;
 
     // ── CLAIM BUTTON ──────────────────────────────────────────────────────────
-    if (interaction.customId.startsWith('ticket_claim_btn_')) {
+    if (interaction.isButton() && interaction.customId.startsWith('ticket_claim_btn_')) {
       const channelId = interaction.customId.replace('ticket_claim_btn_', '');
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id=$1 AND status='open'`, [channelId]);
       if (!rows[0]) return interaction.reply({ content: '⚠️ This ticket is no longer active.', flags: 64 });
@@ -387,25 +439,20 @@ module.exports = {
 
       await pool.query(`UPDATE tickets SET claimed_by=$1 WHERE id=$2`, [interaction.user.id, ticket.id]);
 
-      // Update the original ticket embed to show claimed status
       const updatedCloseRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`ticket_close_btn_${channelId}`).setLabel('Close Ticket').setEmoji('🔒').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`ticket_claim_btn_${channelId}`).setLabel('Claimed ✓').setEmoji('🛡️').setStyle(ButtonStyle.Secondary).setDisabled(true),
       );
-
-      try {
-        await interaction.message.edit({ components: [updatedCloseRow] });
-      } catch {}
+      try { await interaction.message.edit({ components: [updatedCloseRow] }); } catch {}
 
       return interaction.reply({
-        embeds: [new EmbedBuilder()
-          .setColor(0x00cc66)
+        embeds: [new EmbedBuilder().setColor(0x00cc66)
           .setDescription(`🛡️ <@${interaction.user.id}> has claimed this ticket!\n\nOther staff can relax — this one's covered.`)]
       });
     }
 
     // ── REOPEN ───────────────────────────────────────────────────────────────
-    if (interaction.customId.startsWith('ticket_reopen_')) {
+    if (interaction.isButton() && interaction.customId.startsWith('ticket_reopen_')) {
       const channelId = interaction.customId.replace('ticket_reopen_', '');
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id=$1 AND status='closed'`, [channelId]);
       if (!rows[0]) return interaction.reply({ content: '⚠️ Cannot reopen.', flags: 64 });
@@ -424,7 +471,7 @@ module.exports = {
     }
 
     // ── DELETE NOW ────────────────────────────────────────────────────────────
-    if (interaction.customId.startsWith('ticket_delete_')) {
+    if (interaction.isButton() && interaction.customId.startsWith('ticket_delete_')) {
       const channelId = interaction.customId.replace('ticket_delete_', '');
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id=$1`, [channelId]);
       if (!rows[0]) return interaction.reply({ content: '⚠️ Ticket not found.', flags: 64 });
@@ -434,7 +481,7 @@ module.exports = {
     }
 
     // ── CLOSE BUTTON ──────────────────────────────────────────────────────────
-    if (interaction.customId.startsWith('ticket_close_btn_')) {
+    if (interaction.isButton() && interaction.customId.startsWith('ticket_close_btn_')) {
       const channelId = interaction.customId.replace('ticket_close_btn_', '');
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id=$1 AND status='open'`, [channelId]);
       if (!rows[0]) return interaction.reply({ content: '⚠️ Already closed.', flags: 64 });
@@ -459,8 +506,8 @@ module.exports = {
       });
     }
 
-    // ── STAR RATING ───────────────────────────────────────────────────────────
-    if (interaction.customId.startsWith('ticket_rate_')) {
+    // ── STAR RATING BUTTON ────────────────────────────────────────────────────
+    if (interaction.isButton() && interaction.customId.startsWith('ticket_rate_')) {
       const parts = interaction.customId.split('_');
       const ticketId = parseInt(parts[2]);
       const rating = parseInt(parts[3]);
@@ -472,13 +519,30 @@ module.exports = {
       if (ticket.rating) return interaction.reply({ content: '⚠️ You already rated this ticket.', flags: 64 });
       if (interaction.user.id !== ticket.user_id) return interaction.reply({ content: '⚠️ Only the ticket opener can rate.', flags: 64 });
 
-      // Check blacklist — but this is in DMs so guild is null, use ticket.guild_id
       const { rows: bl } = await pool.query(`SELECT 1 FROM rating_blacklist WHERE user_id=$1 AND guild_id=$2`, [interaction.user.id, ticket.guild_id]);
       if (bl.length > 0) return interaction.reply({ content: '⚠️ You are not allowed to give ratings.', flags: 64 });
 
+      // Ratings below 3 stars require a short explanation via modal
+      if (rating <= 2) {
+        const modal = new ModalBuilder()
+          .setCustomId(`ticket_rate_reason_${ticketId}_${rating}`)
+          .setTitle(`Why ${rating} star${rating !== 1 ? 's' : ''}?`);
+
+        const reasonInput = new TextInputBuilder()
+          .setCustomId('reason')
+          .setLabel('What went wrong?')
+          .setStyle(TextInputStyle.Paragraph)
+          .setPlaceholder('Please explain briefly so we can improve...')
+          .setRequired(true)
+          .setMaxLength(500);
+
+        modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
+        return interaction.showModal(modal);
+      }
+
+      // 3+ stars — no reason needed, save immediately
       await pool.query(`UPDATE tickets SET rating=$1, rated_by=$2, status='deleted' WHERE id=$3`, [rating, interaction.user.id, ticketId]);
 
-      // Update staff stats
       if (ticket.claimed_by) {
         try {
           const { addRating } = require('./staffstats');
@@ -492,7 +556,7 @@ module.exports = {
       await interaction.update({
         embeds: [new EmbedBuilder()
           .setTitle('⭐ Thank you for your feedback!')
-          .setColor(rating >= 4 ? 0x2ecc71 : rating === 3 ? 0xff9900 : 0xe74c3c)
+          .setColor(0x2ecc71)
           .setDescription(`You rated your support experience **${stars} (${rating}/5)**.\n\nYour feedback helps us improve our team!`)],
         components: []
       });
@@ -500,56 +564,97 @@ module.exports = {
     }
 
     // ── CREATE BUTTON ─────────────────────────────────────────────────────────
-    if (!interaction.customId.startsWith('ticket_create_')) return;
-    const guildId = interaction.customId.replace('ticket_create_', '');
-    const user = interaction.user;
-    const config = await getConfig(guildId);
-    if (!config) return interaction.reply({ content: '⚠️ Ticket system not configured.', flags: 64 });
+    if (interaction.isButton() && interaction.customId.startsWith('ticket_create_')) {
+      const parts = interaction.customId.replace('ticket_create_', '').split('_');
+      const guildId = parts[0];
+      const typeIndex = parts[1] !== undefined ? parseInt(parts[1]) : 0;
+      const user = interaction.user;
+      const config = await getConfig(guildId);
+      if (!config) return interaction.reply({ content: '⚠️ Ticket system not configured.', flags: 64 });
 
-    const { rows: existing } = await pool.query(`SELECT * FROM tickets WHERE guild_id=$1 AND user_id=$2 AND status='open'`, [guildId, user.id]);
-    if (existing.length > 0) return interaction.reply({ content: `⚠️ You already have an open ticket: <#${existing[0].channel_id}>`, flags: 64 });
+      const types = (config.ticket_types && config.ticket_types.length > 0) ? config.ticket_types : ['General Support'];
+      const ticketType = types[typeIndex] || types[0];
 
-    const channelOptions = {
-      name: `🎫・${user.username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20)}`,
-      type: ChannelType.GuildText,
-      topic: `Ticket opened by ${user.tag}`,
-      permissionOverwrites: [
-        { id: guild.id, deny: ['ViewChannel'] },
-        { id: user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles'] },
-      ]
-    };
-    if (config.staff_role_id) {
-      channelOptions.permissionOverwrites.push({ id: config.staff_role_id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages', 'AttachFiles'] });
+      const { rows: existing } = await pool.query(`SELECT * FROM tickets WHERE guild_id=$1 AND user_id=$2 AND status='open'`, [guildId, user.id]);
+      if (existing.length > 0) return interaction.reply({ content: `⚠️ You already have an open ticket: <#${existing[0].channel_id}>`, flags: 64 });
+
+      // Clean the type text for use in the channel name (strip emoji/symbols)
+      const cleanType = ticketType.replace(/[^\w\s]/gi, '').trim().toLowerCase().replace(/\s+/g, '-').slice(0, 15) || 'ticket';
+      const cleanUser = user.username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15);
+
+      const channelOptions = {
+        name: `🎫・${cleanUser}-${cleanType}`,
+        type: ChannelType.GuildText,
+        topic: `Ticket opened by ${user.tag} | Category: ${ticketType}`,
+        permissionOverwrites: [
+          { id: guild.id, deny: ['ViewChannel'] },
+          { id: user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles'] },
+        ]
+      };
+      if (config.staff_role_id) {
+        channelOptions.permissionOverwrites.push({ id: config.staff_role_id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages', 'AttachFiles'] });
+      }
+      if (config.category_id) channelOptions.parent = config.category_id;
+
+      let ticketChannel;
+      try { ticketChannel = await guild.channels.create(channelOptions); }
+      catch (err) { return interaction.reply({ content: '❌ Failed to create ticket channel. Check my permissions.', flags: 64 }); }
+
+      await pool.query(`INSERT INTO tickets (guild_id, channel_id, user_id, ticket_type) VALUES ($1,$2,$3,$4)`, [guildId, ticketChannel.id, user.id, ticketType]);
+
+      const closeRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`ticket_close_btn_${ticketChannel.id}`).setLabel('Close Ticket').setEmoji('🔒').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`ticket_claim_btn_${ticketChannel.id}`).setLabel('Claim Ticket').setEmoji('🛡️').setStyle(ButtonStyle.Primary),
+      );
+
+      await ticketChannel.send({
+        content: `<@${user.id}>${config.staff_role_id ? ` <@&${config.staff_role_id}>` : ''}`,
+        embeds: [new EmbedBuilder()
+          .setTitle('🎫 Support Ticket')
+          .setColor(0x5865f2)
+          .setDescription(`Hey <@${user.id}>, welcome to your ticket!\n\nDescribe your issue and a staff member will assist you shortly.`)
+          .addFields(
+            { name: '👤 Opened by', value: `<@${user.id}>`, inline: true },
+            { name: '📂 Category', value: ticketType, inline: true },
+            { name: '🛡️ Status', value: '🔴 Unclaimed', inline: true },
+          )
+          .setThumbnail(user.displayAvatarURL({ extension: 'png', size: 256 }))
+          .setFooter({ text: 'A mod will claim this ticket shortly' })],
+        components: [closeRow]
+      });
+
+      return interaction.reply({ content: `✅ Your ticket: <#${ticketChannel.id}>`, flags: 64 });
     }
-    if (config.category_id) channelOptions.parent = config.category_id;
 
-    let ticketChannel;
-    try { ticketChannel = await guild.channels.create(channelOptions); }
-    catch (err) { return interaction.reply({ content: '❌ Failed to create ticket channel. Check my permissions.', flags: 64 }); }
+    // ── RATING REASON MODAL SUBMIT ────────────────────────────────────────────
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('ticket_rate_reason_')) {
+      const parts = interaction.customId.split('_');
+      const ticketId = parseInt(parts[3]);
+      const rating = parseInt(parts[4]);
+      const reason = interaction.fields.getTextInputValue('reason');
 
-    await pool.query(`INSERT INTO tickets (guild_id, channel_id, user_id) VALUES ($1,$2,$3)`, [guildId, ticketChannel.id, user.id]);
+      const { rows } = await pool.query(`SELECT * FROM tickets WHERE id=$1`, [ticketId]);
+      if (!rows[0]) return interaction.reply({ content: '⚠️ Ticket not found.', flags: 64 });
+      const ticket = rows[0];
 
-    const closeRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`ticket_close_btn_${ticketChannel.id}`).setLabel('Close Ticket').setEmoji('🔒').setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId(`ticket_claim_btn_${ticketChannel.id}`).setLabel('Claim Ticket').setEmoji('🛡️').setStyle(ButtonStyle.Primary),
-    );
+      await pool.query(`UPDATE tickets SET rating=$1, rating_reason=$2, rated_by=$3, status='deleted' WHERE id=$4`, [rating, reason, interaction.user.id, ticketId]);
 
-    await ticketChannel.send({
-      content: `<@${user.id}>${config.staff_role_id ? ` <@&${config.staff_role_id}>` : ''}`,
-      embeds: [new EmbedBuilder()
-        .setTitle('🎫 Support Ticket')
-        .setColor(0x5865f2)
-        .setDescription(`Hey <@${user.id}>, welcome to your ticket!\n\nDescribe your issue and a staff member will assist you shortly.`)
-        .addFields(
-          { name: '👤 Opened by', value: `<@${user.id}>`, inline: true },
-          { name: '📅 Opened at', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
-          { name: '🛡️ Status', value: '🔴 Unclaimed', inline: true },
-        )
-        .setThumbnail(user.displayAvatarURL({ extension: 'png', size: 256 }))
-        .setFooter({ text: 'A mod will claim this ticket shortly' })],
-      components: [closeRow]
-    });
+      if (ticket.claimed_by) {
+        try {
+          const { addRating } = require('./staffstats');
+          await addRating(ticket.claimed_by, ticket.guild_id, rating);
+        } catch (err) {
+          console.error('Failed to record rating in staff_stats:', err.message);
+        }
+      }
 
-    return interaction.reply({ content: `✅ Your ticket: <#${ticketChannel.id}>`, flags: 64 });
+      const stars = '⭐'.repeat(rating);
+      return interaction.reply({
+        embeds: [new EmbedBuilder()
+          .setTitle('⭐ Thank you for your feedback!')
+          .setColor(0xe74c3c)
+          .setDescription(`You rated your support experience **${stars} (${rating}/5)**.\n\nYour explanation has been recorded and will help our team improve.`)]
+      });
+    }
   }
 };
