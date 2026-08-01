@@ -3,22 +3,23 @@ const pool = require('../database');
 const { t } = require('../locales');
 const { getGuildLang } = require('../utils/getLang');
 
-async function getLogChannel(guild) {
+// Helper om logkanaal & instellingen op te halen
+async function getGuildSettings(guild) {
   if (!guild) return null;
-  const { rows } = await pool.query(`SELECT log_channel_id FROM guild_settings WHERE guild_id = $1`, [guild.id]);
-  if (!rows[0] || !rows[0].log_channel_id) return null;
-  return guild.channels.cache.get(rows[0].log_channel_id) || null;
+  const { rows } = await pool.query(`SELECT * FROM guild_settings WHERE guild_id = $1`, [guild.id]);
+  return rows[0] || null;
 }
 
 module.exports = (client) => {
 
-  // 🗑️ 1. Message Deleted
+  // 💬 1. MESSAGES (Deleted / Edited)
   client.on('messageDelete', async (message) => {
     if (!message.guild || message.author?.bot) return;
-    const logChannel = await getLogChannel(message.guild);
-    if (!logChannel) return;
+    const settings = await getGuildSettings(message.guild);
+    if (!settings?.log_channel_id || settings.log_messages === false) return;
 
-    const lang = await getGuildLang(message.guild.id);
+    const logChannel = message.guild.channels.cache.get(settings.log_channel_id);
+    if (!logChannel) return;
 
     const embed = new EmbedBuilder()
       .setAuthor({ name: message.author.tag, iconURL: message.author.displayAvatarURL() })
@@ -31,12 +32,14 @@ module.exports = (client) => {
     logChannel.send({ embeds: [embed] });
   });
 
-  // ✏️ 2. Message Edited
   client.on('messageUpdate', async (oldMessage, newMessage) => {
     if (!oldMessage.guild || oldMessage.author?.bot) return;
     if (oldMessage.content === newMessage.content) return;
 
-    const logChannel = await getLogChannel(oldMessage.guild);
+    const settings = await getGuildSettings(oldMessage.guild);
+    if (!settings?.log_channel_id || settings.log_messages === false) return;
+
+    const logChannel = oldMessage.guild.channels.cache.get(settings.log_channel_id);
     if (!logChannel) return;
 
     const embed = new EmbedBuilder()
@@ -53,32 +56,12 @@ module.exports = (client) => {
     logChannel.send({ embeds: [embed] });
   });
 
-  // 🖼️ 3. Avatar Update
-  client.on('userUpdate', async (oldUser, newUser) => {
-    client.guilds.cache.forEach(async (guild) => {
-      const member = await guild.members.fetch(newUser.id).catch(() => null);
-      if (!member) return;
-
-      const logChannel = await getLogChannel(guild);
-      if (!logChannel) return;
-
-      if (oldUser.displayAvatarURL() !== newUser.displayAvatarURL()) {
-        const embed = new EmbedBuilder()
-          .setAuthor({ name: newUser.tag, iconURL: newUser.displayAvatarURL() })
-          .setTitle('Avatar update')
-          .setThumbnail(newUser.displayAvatarURL({ size: 256 }))
-          .setColor(0x9b59b6)
-          .setFooter({ text: `ID: ${newUser.id}` })
-          .setTimestamp();
-
-        logChannel.send({ embeds: [embed] });
-      }
-    });
-  });
-
-  // 📥 4. Member Joined
+  // 👥 2. MEMBERS (Join / Leave)
   client.on('guildMemberAdd', async (member) => {
-    const logChannel = await getLogChannel(member.guild);
+    const settings = await getGuildSettings(member.guild);
+    if (!settings?.log_channel_id || settings.log_members === false) return;
+
+    const logChannel = member.guild.channels.cache.get(settings.log_channel_id);
     if (!logChannel) return;
 
     const embed = new EmbedBuilder()
@@ -86,15 +69,17 @@ module.exports = (client) => {
       .setTitle('Member joined')
       .setColor(0x2ecc71)
       .setDescription(`<@${member.id}> joined the server.`)
-      .setFooter({ text: `ID: ${member.id}` })
+      .setFooter({ text: `User ID: ${member.id}` })
       .setTimestamp();
 
     logChannel.send({ embeds: [embed] });
   });
 
-  // 📤 5. Member Left
   client.on('guildMemberRemove', async (member) => {
-    const logChannel = await getLogChannel(member.guild);
+    const settings = await getGuildSettings(member.guild);
+    if (!settings?.log_channel_id || settings.log_members === false) return;
+
+    const logChannel = member.guild.channels.cache.get(settings.log_channel_id);
     if (!logChannel) return;
 
     const embed = new EmbedBuilder()
@@ -102,8 +87,46 @@ module.exports = (client) => {
       .setTitle('Member left')
       .setColor(0xe74c3c)
       .setDescription(`<@${member.id}> left the server.`)
-      .setFooter({ text: `ID: ${member.id}` })
+      .setFooter({ text: `User ID: ${member.id}` })
       .setTimestamp();
+
+    logChannel.send({ embeds: [embed] });
+  });
+
+  // 🔊 3. VOICE CHANNELS (Join / Leave / Move)
+  client.on('voiceStateUpdate', async (oldState, newState) => {
+    const guild = newState.guild || oldState.guild;
+    const settings = await getGuildSettings(guild);
+    if (!settings?.log_channel_id || settings.log_voice === false) return;
+
+    const logChannel = guild.channels.cache.get(settings.log_channel_id);
+    if (!logChannel) return;
+
+    const member = newState.member;
+    const embed = new EmbedBuilder()
+      .setAuthor({ name: member.user.tag, iconURL: member.user.displayAvatarURL() })
+      .setTimestamp();
+
+    // Joined Voice Channel
+    if (!oldState.channelId && newState.channelId) {
+      embed.setTitle('Joined voice channel')
+        .setDescription(`<@${member.id}> joined **#${newState.channel.name}**`)
+        .setColor(0x2ecc71);
+    }
+    // Left Voice Channel
+    else if (oldState.channelId && !newState.channelId) {
+      embed.setTitle('Left voice channel')
+        .setDescription(`<@${member.id}> left **#${oldState.channel.name}**`)
+        .setColor(0xe74c3c);
+    }
+    // Switched Voice Channel
+    else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
+      embed.setTitle('Switched voice channels')
+        .setDescription(`<@${member.id}> moved from **#${oldState.channel.name}** to **#${newState.channel.name}**`)
+        .setColor(0x3498db);
+    } else {
+      return; // Negeer Mute/Deafen updates
+    }
 
     logChannel.send({ embeds: [embed] });
   });
