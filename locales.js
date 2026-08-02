@@ -293,7 +293,7 @@ const translations = {
     help_cat_verify: '✅ Verification',
     help_cat_tools: '🛠️ Utility Tools',
     help_cat_boosts: '🚀 Boosts & Giveaways',
-    help_cat_games: '🎮 Games'
+    help_cat_games: '🎮 Games',
 
     // Warn
     warn_cannot_self: '⚠️ You cannot warn yourself.',
@@ -661,7 +661,7 @@ const translations = {
     help_cat_verify: '✅ Verificatie',
     help_cat_tools: '🛠️ Hulpmiddelen',
     help_cat_boosts: '🚀 Boosts & Giveaways',
-    help_cat_games: '🎮 Spellen'
+    help_cat_games: '🎮 Spellen',
 
     // Warn
     warn_cannot_self: '⚠️ Je kunt jezelf geen waarschuwing geven.',
