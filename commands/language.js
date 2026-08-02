@@ -5,12 +5,12 @@ const { t } = require('../locales');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('language')
-    .setDescription('Change bot language / Verander de taal van de bot')
+    .setDescription('Change bot language / Verander de taal van de bot / Changer la langue du bot')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addStringOption(option =>
       option
         .setName('lang')
-        .setDescription('Choose a language / Kies een taal')
+        .setDescription('Choose a language / Kies een taal / Choisissez une langue')
         .setRequired(true)
         .addChoices(
           { name: 'Nederlands 🇳🇱', value: 'nl' },
