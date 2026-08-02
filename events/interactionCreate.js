@@ -23,13 +23,17 @@ module.exports = {
 
         // ── 2. VERIFICATION BUTTON HANDLER ────────────────────────────────────
         if (customId === 'verify_button') {
+            // Defer the reply immediately to prevent the interaction from timing out (10062 unknown interaction)
+            if (!interaction.deferred && !interaction.replied) {
+                await interaction.deferReply({ ephemeral: true });
+            }
+
             const { rows } = await pool.query(`SELECT * FROM verify_config WHERE guild_id = $1`, [interaction.guild.id]);
             const config = rows[0];
 
             if (!config || !config.role_ids || config.role_ids.length === 0) {
-                return interaction.reply({
-                    content: '❌ **System Error:** Verification hasn\'t been set up yet. Ask an admin to run `/setup-verify`.',
-                    ephemeral: true
+                return interaction.editReply({
+                    content: '❌ **System Error:** Verification hasn\'t been set up yet. Ask an admin to run `/setup-verify`.'
                 });
             }
 
@@ -46,18 +50,16 @@ module.exports = {
                 : null;
 
             if (roles.length === 0) {
-                return interaction.reply({
-                    content: '❌ **System Error:** None of the configured roles could be found. Please contact an Admin.',
-                    ephemeral: true
+                return interaction.editReply({
+                    content: '❌ **System Error:** None of the configured roles could be found. Please contact an Admin.'
                 });
             }
 
             // Check if the user already has all configured roles
             const alreadyHasAll = roles.every(r => interaction.member.roles.cache.has(r.id));
             if (alreadyHasAll) {
-                return interaction.reply({
-                    content: 'You are already verified! 🎉',
-                    ephemeral: true
+                return interaction.editReply({
+                    content: 'You are already verified! 🎉'
                 });
             }
 
@@ -75,9 +77,8 @@ module.exports = {
                     .setDescription(`Your verification was successful. You've been given:\n${roles.map(r => `🟢 ${r}`).join('\n')}`)
                     .setColor(0x2ecc71);
 
-                await interaction.reply({
-                    embeds: [successEmbed],
-                    ephemeral: true
+                await interaction.editReply({
+                    embeds: [successEmbed]
                 });
 
                 // Drop a clean DM to welcome them
@@ -110,16 +111,8 @@ module.exports = {
             } catch (error) {
                 console.error('Verification Error:', error);
 
-                if (interaction.replied || interaction.deferred) {
-                    return interaction.followUp({
-                        content: '⚠️ **Error:** Could not update your roles. Check role hierarchy!',
-                        ephemeral: true
-                    });
-                }
-
-                await interaction.reply({
-                    content: '⚠️ **Error:** Could not update your roles. Please ensure the bot\'s role is positioned *above* the configured verification roles in the server settings.',
-                    ephemeral: true
+                return interaction.editReply({
+                    content: '⚠️ **Error:** Could not update your roles. Please ensure the bot\'s role is positioned *above* the configured verification roles in the server settings.'
                 });
             }
         }

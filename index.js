@@ -96,6 +96,6 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // 👈 Start het loggingsysteem
-require('./events/logging')(client);
+require('./utils/logging')(client);
 
 client.login(process.env.WELCOME_TOKEN);

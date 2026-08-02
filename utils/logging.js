@@ -1,7 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const pool = require('../database');
 const { t } = require('../locales');
-const { getGuildLang } = require('../utils/getLang');
+const { getGuildLang } = require('./getLang');
 
 // Helper om logkanaal & instellingen op te halen
 async function getGuildSettings(guild) {
