@@ -98,4 +98,6 @@ client.on('interactionCreate', async (interaction) => {
 // 👈 Start het loggingsysteem
 require('./utils/logging')(client);
 
+require('./events/logging')(client);
+
 client.login(process.env.WELCOME_TOKEN);
