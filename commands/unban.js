@@ -1,4 +1,6 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { t } = require('../locales');
+const { getGuildLang } = require('../utils/getLang');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -14,14 +16,22 @@ module.exports = {
         .setDescription('Reason for the unban')),
 
   async execute(interaction) {
+    const lang = await getGuildLang(interaction.guildId);
     const userId = interaction.options.getString('user_id');
-    const reason = interaction.options.getString('reason') || 'No reason provided';
+    const reason = interaction.options.getString('reason') || t(lang, 'no_reason_provided');
 
     try {
-      await interaction.guild.members.unban(userId, `${reason} (Unbanned by ${interaction.user.tag})`);
-      await interaction.reply({ content: `✅ Successfully unbanned user ID \`${userId}\`. | **Reason:** ${reason}` });
+      await interaction.guild.members.unban(userId, `${reason} (${t(lang, 'unbanned_by', { tag: interaction.user.tag })})`);
+      
+      const embed = new EmbedBuilder()
+        .setTitle(`✅ ${t(lang, 'user_unbanned_title')}`)
+        .setColor(0x00cc66)
+        .setDescription(t(lang, 'user_unbanned_desc', { id: userId, reason }))
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed] });
     } catch (error) {
-      await interaction.reply({ content: `❌ Could not unban user ID \`${userId}\`. Verify the ID is valid and that the user is currently banned.`, ephemeral: true });
+      await interaction.reply({ content: t(lang, 'unban_failed', { id: userId }), ephemeral: true });
     }
   },
 };

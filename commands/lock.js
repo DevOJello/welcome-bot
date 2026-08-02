@@ -1,4 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { getGuildLang } = require('../utils/getLang');
+const { t } = require('../locales');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -22,10 +24,9 @@ module.exports = {
     const guild = interaction.guild;
     if (!guild) return interaction.reply({ content: '⚠️ This command can only be used inside a server.', flags: 64 });
 
+    const lang = await getGuildLang(guild.id);
     const sub = interaction.options.getSubcommand();
     const target = interaction.options.getChannel('channel') || interaction.channel;
-
-    // Get the @everyone role
     const everyoneRole = guild.roles.everyone;
 
     if (sub === 'channel') {
@@ -36,35 +37,35 @@ module.exports = {
 
         return interaction.reply({
           embeds: [new EmbedBuilder()
-            .setTitle('🔒 Channel Locked')
+            .setTitle(t(lang, 'lock_title'))
             .setColor(0xff4444)
-            .setDescription(`<#${target.id}> has been locked.\nMembers can no longer send messages.`)
-            .setFooter({ text: `Locked by ${interaction.user.username}` })
+            .setDescription(t(lang, 'lock_desc', { channel: target.id }))
+            .setFooter({ text: t(lang, 'locked_by', { user: interaction.user.username }) })
             .setTimestamp()]
         });
       } catch (err) {
         console.error('Failed to lock channel:', err.message);
-        return interaction.reply({ content: '❌ Failed to lock the channel. Make sure Oscar has the **Manage Channels** permission.', flags: 64 });
+        return interaction.reply({ content: t(lang, 'lock_error'), flags: 64 });
       }
     }
 
     if (sub === 'open') {
       try {
         await target.permissionOverwrites.edit(everyoneRole, {
-          SendMessages: null, // null = reset to default (inherit from server)
+          SendMessages: null,
         });
 
         return interaction.reply({
           embeds: [new EmbedBuilder()
-            .setTitle('🔓 Channel Unlocked')
+            .setTitle(t(lang, 'unlock_title'))
             .setColor(0x00cc66)
-            .setDescription(`<#${target.id}> has been unlocked.\nMembers can send messages again.`)
-            .setFooter({ text: `Unlocked by ${interaction.user.username}` })
+            .setDescription(t(lang, 'unlock_desc', { channel: target.id }))
+            .setFooter({ text: t(lang, 'unlocked_by', { user: interaction.user.username }) })
             .setTimestamp()]
         });
       } catch (err) {
         console.error('Failed to unlock channel:', err.message);
-        return interaction.reply({ content: '❌ Failed to unlock the channel. Make sure Oscar has the **Manage Channels** permission.', flags: 64 });
+        return interaction.reply({ content: t(lang, 'unlock_error'), flags: 64 });
       }
     }
   }

@@ -1,4 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { t } = require('../locales');
+const { getGuildLang } = require('../utils/getLang');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -6,7 +8,9 @@ module.exports = {
     .setDescription('Check the bot latency and API response time'),
 
   async execute(interaction) {
-    const sent = await interaction.reply({ content: 'Pinging...', fetchReply: true });
+    const lang = await getGuildLang(interaction.guildId);
+
+    const sent = await interaction.reply({ content: t(lang, 'pinging'), fetchReply: true });
     
     const botLatency = sent.createdTimestamp - interaction.createdTimestamp;
     const apiLatency = Math.round(interaction.client.ws.ping);
@@ -15,8 +19,8 @@ module.exports = {
       .setTitle('🏓 Pong!')
       .setColor(0x5865F2)
       .addFields(
-        { name: '🤖 Bot Latency', value: `\`${botLatency}ms\``, inline: true },
-        { name: '🌐 API Latency', value: `\`${apiLatency}ms\``, inline: true }
+        { name: `🤖 ${t(lang, 'bot_latency')}`, value: `\`${botLatency}ms\``, inline: true },
+        { name: `🌐 ${t(lang, 'api_latency')}`, value: `\`${apiLatency}ms\``, inline: true }
       )
       .setTimestamp();
 

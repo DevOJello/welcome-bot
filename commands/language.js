@@ -1,5 +1,6 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const pool = require('../database');
+const { t } = require('../locales');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -29,10 +30,7 @@ module.exports = {
       [guildId, lang]
     );
 
-    const msg = lang === 'nl' 
-      ? '✅ De taal van de bot is succesvol ingesteld op **Nederlands**!' 
-      : '✅ The bot language has been successfully set to **English**!';
-
-    return interaction.reply({ content: msg, flags: 64 });
+    const key = lang === 'nl' ? 'lang_updated_nl' : 'lang_updated_en';
+    return interaction.reply({ content: t(lang, key), flags: 64 });
   }
 };

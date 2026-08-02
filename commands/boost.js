@@ -1,5 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const pool = require('../database');
+const { getGuildLang } = require('../utils/getLang');
+const { t } = require('../locales');
 
 async function initDB() {
   await pool.query(`
@@ -18,7 +20,6 @@ module.exports = {
     .setName('boost')
     .setDescription('Configure the boost thank you system')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
-
     .addSubcommand(sub =>
       sub.setName('setup')
         .setDescription('Set up the boost thank you system')
@@ -26,22 +27,22 @@ module.exports = {
         .addRoleOption(opt => opt.setName('role').setDescription('Role to give to boosters automatically').setRequired(true))
         .addStringOption(opt => opt.setName('message').setDescription('Thank you message (use {user} for mention)').setRequired(false))
     )
-
     .addSubcommand(sub =>
       sub.setName('config')
         .setDescription('View current boost configuration')
     ),
 
-  async execute(interaction, client) {
+  async execute(interaction) {
     const guild = interaction.guild;
-    if (!guild) return interaction.reply({ content: '⚠️ This command can only be used inside a server.', flags: 64 });
+    if (!guild) return interaction.reply({ content: t('en', 'guild_only'), flags: 64 });
 
+    const lang = await getGuildLang(guild.id);
     const sub = interaction.options.getSubcommand();
 
     if (sub === 'setup') {
       const channel = interaction.options.getChannel('channel');
       const role = interaction.options.getRole('role');
-      const message = interaction.options.getString('message') || `Thank you so much for boosting **${guild.name}**, {user}! 🚀💜`;
+      const message = interaction.options.getString('message') || t(lang, 'boost_default_msg', { guild: guild.name });
 
       await pool.query(`
         INSERT INTO boost_config (guild_id, channel_id, role_id, message)
@@ -54,12 +55,12 @@ module.exports = {
 
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setTitle('✅ Boost System Configured!')
+          .setTitle(t(lang, 'boost_setup_title'))
           .setColor(0xff73fa)
           .addFields(
-            { name: '📢 Boost Channel', value: `<#${channel.id}>`, inline: true },
-            { name: '🎭 Booster Role', value: `<@&${role.id}>`, inline: true },
-            { name: '💬 Message', value: message },
+            { name: t(lang, 'boost_channel'), value: `<#${channel.id}>`, inline: true },
+            { name: t(lang, 'boost_role'), value: `<@&${role.id}>`, inline: true },
+            { name: t(lang, 'boost_message'), value: message }
           )]
       });
     }
@@ -68,16 +69,16 @@ module.exports = {
       const { rows } = await pool.query(`SELECT * FROM boost_config WHERE guild_id = $1`, [guild.id]);
       const config = rows[0];
 
-      if (!config) return interaction.reply({ content: '⚠️ Boost system not set up yet. Use `/boost setup` first.', flags: 64 });
+      if (!config) return interaction.reply({ content: t(lang, 'boost_not_configured'), flags: 64 });
 
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setTitle('⚙️ Boost Configuration')
+          .setTitle(t(lang, 'boost_config_title'))
           .setColor(0xff73fa)
           .addFields(
-            { name: '📢 Boost Channel', value: `<#${config.channel_id}>`, inline: true },
-            { name: '🎭 Booster Role', value: `<@&${config.role_id}>`, inline: true },
-            { name: '💬 Message', value: config.message },
+            { name: t(lang, 'boost_channel'), value: `<#${config.channel_id}>`, inline: true },
+            { name: t(lang, 'boost_role'), value: `<@&${config.role_id}>`, inline: true },
+            { name: t(lang, 'boost_message'), value: config.message }
           )]
       });
     }

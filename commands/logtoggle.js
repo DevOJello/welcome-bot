@@ -46,9 +46,9 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setTitle('⚙️ Log Settings Updated')
       .setColor(enabled ? 0x00cc66 : 0xff4444)
-      .setDescription(t(lang, 'log_toggle_success', { category: category.replace('log_', ''), status: statusText }))
+      .setDescription(t(lang, 'log_toggle_success', { category, statusText }))
       .setTimestamp();
 
-    return interaction.reply({ embeds: [embed], flags: 64 });
+    return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 };

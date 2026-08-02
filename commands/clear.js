@@ -1,4 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { getGuildLang } = require('../utils/getLang');
+const { t } = require('../locales');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -22,6 +24,7 @@ module.exports = {
     const guild = interaction.guild;
     if (!guild) return interaction.reply({ content: '⚠️ This command can only be used inside a server.', flags: 64 });
 
+    const lang = await getGuildLang(guild.id);
     const amount = interaction.options.getInteger('amount');
     const target = interaction.options.getChannel('channel') || interaction.channel;
 
@@ -38,15 +41,15 @@ module.exports = {
 
       return interaction.editReply({
         embeds: [new EmbedBuilder()
-          .setTitle('🧹 Channel Cleared')
+          .setTitle(t(lang, 'clear_title'))
           .setColor(0x5865f2)
-          .setDescription(`Deleted **${deleted.size}** message(s) in <#${target.id}>.${deleted.size < amount ? `\n\n⚠️ Some messages were older than 14 days and couldn't be deleted.` : ''}`)
-          .setFooter({ text: `Cleared by ${interaction.user.username}` })
+          .setDescription(t(lang, 'clear_description', { count: deleted.size, channel: target.id }) + (deleted.size < amount ? `\n\n${t(lang, 'clear_old_messages_warning')}` : ''))
+          .setFooter({ text: t(lang, 'clear_footer', { user: interaction.user.username }) })
           .setTimestamp()]
       });
     } catch (err) {
       console.error('Failed to clear messages:', err.message);
-      return interaction.editReply({ content: '❌ Failed to clear messages. Make sure Oscar has the **Manage Messages** permission.' });
+      return interaction.editReply({ content: t(lang, 'clear_error'), flags: 64 });
     }
   }
 };

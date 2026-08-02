@@ -1,5 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const pool = require('../database');
+const { t } = require('../locales');
+const { getGuildLang } = require('../utils/getLang');
 
 async function initDB() {
   await pool.query(`
@@ -39,8 +41,9 @@ module.exports = {
     ),
 
   async execute(interaction, client) {
+    const lang = await getGuildLang(interaction.guildId);
     const guild = interaction.guild;
-    if (!guild) return interaction.reply({ content: '⚠️ This command can only be used inside a server.', flags: 64 });
+    if (!guild) return interaction.reply({ content: t(lang, 'guild_only_command'), flags: 64 });
 
     const sub = interaction.options.getSubcommand();
 
@@ -48,7 +51,7 @@ module.exports = {
     if (sub === 'setup') {
       const channel = interaction.options.getChannel('channel');
       const role = interaction.options.getRole('role');
-      const dm = interaction.options.getString('dm') || `Welcome to **${guild.name}**, {user}! We're glad to have you here. 🎉`;
+      const dm = interaction.options.getString('dm') || t(lang, 'welcome_default_dm', { guild: guild.name });
 
       await pool.query(`
         INSERT INTO welcome_config (guild_id, channel_id, role_id, dm_message)
@@ -62,12 +65,12 @@ module.exports = {
 
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setTitle('✅ Welcome System Configured!')
+          .setTitle(`✅ ${t(lang, 'welcome_setup_title')}`)
           .setColor(0x00ff00)
           .addFields(
-            { name: '📢 Welcome Channel', value: `<#${channel.id}>`, inline: true },
-            { name: '🎭 Auto Role', value: `<@&${role.id}>`, inline: true },
-            { name: '📩 DM Message', value: dm },
+            { name: `📢 ${t(lang, 'welcome_chan_label')}`, value: `<#${channel.id}>`, inline: true },
+            { name: `🎭 ${t(lang, 'welcome_role_label')}`, value: `<@&${role.id}>`, inline: true },
+            { name: `📩 ${t(lang, 'welcome_dm_label')}`, value: dm },
           )]
       });
     }
@@ -78,17 +81,17 @@ module.exports = {
       const config = rows[0];
 
       if (!config) {
-        return interaction.reply({ content: '⚠️ Welcome system not set up yet. Use `/welcome setup` first.', flags: 64 });
+        return interaction.reply({ content: t(lang, 'welcome_not_setup'), flags: 64 });
       }
 
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setTitle('⚙️ Welcome Configuration')
+          .setTitle(`⚙️ ${t(lang, 'welcome_config_title')}`)
           .setColor(0x6C63FF)
           .addFields(
-            { name: '📢 Welcome Channel', value: `<#${config.channel_id}>`, inline: true },
-            { name: '🎭 Auto Role', value: `<@&${config.role_id}>`, inline: true },
-            { name: '📩 DM Message', value: config.dm_message },
+            { name: `📢 ${t(lang, 'welcome_chan_label')}`, value: `<#${config.channel_id}>`, inline: true },
+            { name: `🎭 ${t(lang, 'welcome_role_label')}`, value: `<@&${config.role_id}>`, inline: true },
+            { name: `📩 ${t(lang, 'welcome_dm_label')}`, value: config.dm_message },
           )]
       });
     }
@@ -96,9 +99,9 @@ module.exports = {
     // ── TEST ─────────────────────────────────────────────────────────────────
     if (sub === 'test') {
       const { rows } = await pool.query(`SELECT * FROM welcome_config WHERE guild_id = $1`, [guild.id]);
-      if (!rows[0]) return interaction.reply({ content: '⚠️ Welcome system not set up yet. Use `/welcome setup` first.', flags: 64 });
+      if (!rows[0]) return interaction.reply({ content: t(lang, 'welcome_not_setup'), flags: 64 });
 
-      await interaction.reply({ content: '✅ Sending a test welcome message...', flags: 64 });
+      await interaction.reply({ content: `✅ ${t(lang, 'welcome_test_success')}`, flags: 64 });
 
       // Fire the guildMemberAdd handler with the interaction user as if they just joined
       client.emit('guildMemberAdd', await guild.members.fetch(interaction.user.id));

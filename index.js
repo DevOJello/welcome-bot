@@ -15,7 +15,8 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent, // 👈 Here is the fix for your transcripts!
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates, // 👈 Nodig voor voice logs!
   ],
   partials: ['MESSAGE', 'CHANNEL', 'REACTION'],
 });
@@ -35,7 +36,7 @@ for (const file of fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'))) 
 const eventsPath = path.join(__dirname, 'events');
 if (!fs.existsSync(eventsPath)) fs.mkdirSync(eventsPath);
 
-for (const file of fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'))) {
+for (const file of fs.readdirSync(eventsPath).filter(f => f.endsWith('.js') && f !== 'logging.js')) {
   const event = require(path.join(eventsPath, file));
   if (event.once) {
     client.once(event.name, (...args) => event.execute(...args, client));
@@ -46,7 +47,6 @@ for (const file of fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'))) {
 
 const rest = new REST({ version: '10' }).setToken(process.env.WELCOME_TOKEN);
 
-// 👈 Changed 'clientReady' to 'ready' to ensure this block actually runs
 client.once('ready', async () => {
   console.log(`👋 Welcome Bot logged in as ${client.user.tag}`);
   try {
@@ -94,5 +94,8 @@ client.on('interactionCreate', async (interaction) => {
     } catch {}
   }
 });
+
+// 👈 Start het loggingsysteem
+require('./events/logging')(client);
 
 client.login(process.env.WELCOME_TOKEN);

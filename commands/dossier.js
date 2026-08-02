@@ -65,7 +65,7 @@ module.exports = {
             database[target.id].notes.push(entry);
             saveHistory(database);
 
-            return interaction.reply({ content: `✅ Appended profile note to **${target.username}**.`, ephemeral: true });
+            return interaction.reply({ content: `✅ Appended profile note to **${target.username}**.`, flags: 64 });
         }
 
         // --- SUBCOMMAND: WARN ---
@@ -94,13 +94,13 @@ module.exports = {
 
             const fileArray = database[target.id][type];
             if (!fileArray || index < 0 || index >= fileArray.length) {
-                return interaction.reply({ content: '❌ **Error:** No record found at that index location number.', ephemeral: true });
+                return interaction.reply({ content: '❌ **Error:** No record found at that index location number.', flags: 64 });
             }
 
             const removedItem = fileArray.splice(index, 1);
             saveHistory(database);
 
-            return interaction.reply({ content: `✅ Successfully cleared record index \`#${index + 1}\` from **${target.username}**'s case file.\n> *Removed: ${removedItem}*`, ephemeral: true });
+            return interaction.reply({ content: `✅ Successfully cleared record index \`#${index + 1}\` from **${target.username}**'s case file.\n> *Removed: ${removedItem}*`, flags: 64 });
         }
 
         // --- SUBCOMMAND: VIEW ---
@@ -123,7 +123,7 @@ module.exports = {
                 )
                 .setTimestamp();
 
-            return interaction.reply({ embeds: [embed], ephemeral: true });
+            return interaction.reply({ embeds: [embed], flags: 64 });
         }
 
         // --- SUBCOMMAND: STAFF STATS ---

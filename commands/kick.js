@@ -1,4 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { getGuildLang } = require('../utils/getLang');
+const { t } = require('../locales');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -14,20 +16,21 @@ module.exports = {
         .setDescription('Reason for the kick')),
 
   async execute(interaction) {
+    const lang = await getGuildLang(interaction.guildId);
     const target = interaction.options.getUser('target');
-    const reason = interaction.options.getString('reason') || 'No reason provided';
+    const reason = interaction.options.getString('reason') || t(lang, 'no_reason_provided');
 
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
 
     if (!member) {
-      return interaction.reply({ content: '❌ That user is not in this server.', ephemeral: true });
+      return interaction.reply({ content: t(lang, 'user_not_in_server'), flags: 64 });
     }
 
     if (!member.kickable) {
-      return interaction.reply({ content: '❌ Cannot kick this user.', ephemeral: true });
+      return interaction.reply({ content: t(lang, 'cannot_kick_user'), flags: 64 });
     }
 
-    await member.kick(`${reason} (Kicked by ${interaction.user.tag})`);
-    await interaction.reply({ content: `👢 **${target.tag}** has been kicked. | **Reason:** ${reason}` });
+    await member.kick(`${reason} (${t(lang, 'kicked_by', { tag: interaction.user.tag })})`);
+    await interaction.reply({ content: t(lang, 'kick_success', { tag: target.tag, reason }) });
   },
 };

@@ -1,4 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { t } = require('../locales');
+const { getGuildLang } = require('../utils/getLang');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -11,6 +13,7 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    const lang = await getGuildLang(interaction.guildId);
     const role = interaction.options.getRole('role');
     const guild = interaction.guild;
 
@@ -20,20 +23,20 @@ module.exports = {
 
     // Role properties
     const createdAt = `<t:${Math.floor(role.createdTimestamp / 1000)}:R>`;
-    const isHoisted = role.hoist ? 'Yes' : 'No';
-    const isMentionable = role.mentionable ? 'Yes' : 'No';
+    const isHoisted = role.hoist ? t(lang, 'yes') : t(lang, 'no');
+    const isMentionable = role.mentionable ? t(lang, 'yes') : t(lang, 'no');
     const hexColor = role.hexColor.toUpperCase();
 
     // Key permissions mapping
     const permissionsMap = {
-      Administrator: 'Administrator',
-      ManageGuild: 'Manage Server',
-      ManageRoles: 'Manage Roles',
-      ManageChannels: 'Manage Channels',
-      KickMembers: 'Kick Members',
-      BanMembers: 'Ban Members',
-      ManageMessages: 'Manage Messages',
-      MentionEveryone: 'Mention @everyone',
+      Administrator: t(lang, 'perm_administrator'),
+      ManageGuild: t(lang, 'perm_manage_guild'),
+      ManageRoles: t(lang, 'perm_manage_roles'),
+      ManageChannels: t(lang, 'perm_manage_channels'),
+      KickMembers: t(lang, 'perm_kick_members'),
+      BanMembers: t(lang, 'perm_ban_members'),
+      ManageMessages: t(lang, 'perm_manage_messages'),
+      MentionEveryone: t(lang, 'perm_mention_everyone'),
     };
 
     const keyPermissions = role.permissions.toArray()
@@ -42,22 +45,22 @@ module.exports = {
 
     const permissionsText = keyPermissions.length > 0 
       ? keyPermissions.join('\n') 
-      : 'No key/elevated permissions';
+      : t(lang, 'roleinfo_no_key_perms');
 
     // Embed construction
     const embed = new EmbedBuilder()
-      .setTitle(`🎭 Role Info: ${role.name}`)
+      .setTitle(`🎭 ${t(lang, 'roleinfo_title', { name: role.name })}`)
       .setColor(role.color || 0x99AAB5)
       .addFields(
-        { name: '🆔 Role ID', value: `\`${role.id}\``, inline: true },
-        { name: '👥 Member Count', value: `**${memberCount}**`, inline: true },
-        { name: '🎨 Color Code', value: `\`${hexColor}\``, inline: true },
-        { name: '📌 Displayed Separately?', value: isHoisted, inline: true },
-        { name: '🔔 Mentionable?', value: isMentionable, inline: true },
-        { name: '📅 Created On', value: createdAt, inline: true },
-        { name: '🔑 Key Permissions', value: permissionsText, inline: false }
+        { name: `🆔 ${t(lang, 'roleinfo_role_id')}`, value: `\`${role.id}\``, inline: true },
+        { name: `👥 ${t(lang, 'roleinfo_member_count')}`, value: `**${memberCount}**`, inline: true },
+        { name: `🎨 ${t(lang, 'roleinfo_color_code')}`, value: `\`${hexColor}\``, inline: true },
+        { name: `📌 ${t(lang, 'roleinfo_hoisted')}`, value: isHoisted, inline: true },
+        { name: `🔔 ${t(lang, 'roleinfo_mentionable')}`, value: isMentionable, inline: true },
+        { name: `📅 ${t(lang, 'roleinfo_created_on')}`, value: createdAt, inline: true },
+        { name: `🔑 ${t(lang, 'roleinfo_key_perms')}`, value: permissionsText, inline: false }
       )
-      .setFooter({ text: `Requested by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL({ dynamic: true }) })
+      .setFooter({ text: t(lang, 'requested_by', { user: interaction.user.tag }), iconURL: interaction.user.displayAvatarURL({ dynamic: true }) })
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed] });

@@ -1,5 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const pool = require('../database');
+const { t } = require('../locales');
+const { getGuildLang } = require('../utils/getLang');
 
 async function initDB() {
   await pool.query(`
@@ -55,6 +57,7 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
   async execute(interaction) {
+    const lang = await getGuildLang(interaction.guildId);
     const target = interaction.options.getUser('target');
     const guildId = interaction.guild.id;
 
@@ -71,24 +74,25 @@ module.exports = {
     const avgRating = stats.total_ratings > 0
       ? (stats.rating_sum / stats.total_ratings).toFixed(2)
       : null;
+
     const starDisplay = avgRating
-      ? `${'⭐'.repeat(Math.round(avgRating))} ${avgRating}/5 (${stats.total_ratings} rating${stats.total_ratings !== 1 ? 's' : ''})`
-      : 'No ratings yet';
+      ? `${'⭐'.repeat(Math.round(avgRating))} ${avgRating}/5 (${t(lang, 'staffstats_ratings_count', { count: stats.total_ratings })})`
+      : t(lang, 'staffstats_no_ratings');
 
     const embed = new EmbedBuilder()
-      .setTitle(`📊 Staff Activity: ${target.username}`)
+      .setTitle(`📊 ${t(lang, 'staffstats_title', { user: target.username })}`)
       .setColor(0x5865F2)
       .setThumbnail(target.displayAvatarURL({ extension: 'png' }))
       .addFields(
-        { name: '🎟️ Tickets Closed', value: `\`${stats.tickets_closed}\``, inline: true },
-        { name: '🧹 Messages Cleared', value: `\`${stats.messages_cleared}\``, inline: true },
-        { name: '⚠️ Warnings Issued', value: `\`${stats.warns_given}\``, inline: true },
-        { name: '🔨 Bans Issued', value: `\`${stats.bans_issued}\``, inline: true },
-        { name: '👢 Kicks Issued', value: `\`${stats.kicks_issued}\``, inline: true },
-        { name: '⭐ Ticket Ratings', value: starDisplay, inline: false },
+        { name: `🎟️ ${t(lang, 'staffstats_tickets')}`, value: `\`${stats.tickets_closed}\``, inline: true },
+        { name: `🧹 ${t(lang, 'staffstats_cleared')}`, value: `\`${stats.messages_cleared}\``, inline: true },
+        { name: `⚠️ ${t(lang, 'staffstats_warns')}`, value: `\`${stats.warns_given}\``, inline: true },
+        { name: `🔨 ${t(lang, 'staffstats_bans')}`, value: `\`${stats.bans_issued}\``, inline: true },
+        { name: `👢 ${t(lang, 'staffstats_kicks')}`, value: `\`${stats.kicks_issued}\``, inline: true },
+        { name: `⭐ ${t(lang, 'staffstats_ratings')}`, value: starDisplay, inline: false },
       )
       .setTimestamp()
-      .setFooter({ text: 'Oscar Management Utility' });
+      .setFooter({ text: t(lang, 'staffstats_footer') });
 
     return interaction.reply({ embeds: [embed] });
   },

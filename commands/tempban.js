@@ -1,4 +1,6 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { t } = require('../locales');
+const { getGuildLang } = require('../utils/getLang');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -19,22 +21,32 @@ module.exports = {
         .setDescription('Reason for the temporary ban')),
 
   async execute(interaction) {
+    const lang = await getGuildLang(interaction.guildId);
     const target = interaction.options.getUser('target');
     const hours = interaction.options.getInteger('duration_hours');
-    const reason = interaction.options.getString('reason') || 'No reason provided';
+    const reason = interaction.options.getString('reason') || t(lang, 'no_reason_provided');
 
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
 
     if (member && !member.bannable) {
-      return interaction.reply({ content: '❌ Cannot tempban this user.', ephemeral: true });
+      return interaction.reply({ content: t(lang, 'cannot_ban_user'), ephemeral: true });
     }
 
-    await interaction.guild.members.ban(target, { reason: `Tempban (${hours}h): ${reason}` });
-    await interaction.reply({ content: `⏳ **${target.tag}** has been temporarily banned for **${hours} hour(s)**. | **Reason:** ${reason}` });
+    await interaction.guild.members.ban(target, { 
+      reason: `${t(lang, 'tempban_tag', { hours })}: ${reason}` 
+    });
+
+    const embed = new EmbedBuilder()
+      .setTitle(`⏳ ${t(lang, 'user_tempbanned_title')}`)
+      .setColor(0xff6600)
+      .setDescription(t(lang, 'user_tempbanned_desc', { user: target.tag, hours, reason }))
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
 
     setTimeout(async () => {
       try {
-        await interaction.guild.members.unban(target.id, 'Tempban expired');
+        await interaction.guild.members.unban(target.id, t(lang, 'tempban_expired'));
       } catch (err) {
         console.error(`Failed to automatically unban ${target.id}:`, err);
       }

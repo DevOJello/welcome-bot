@@ -1,4 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
+const { t } = require('../locales');
+const { getGuildLang } = require('../utils/getLang');
 
 // Global in-memory storage for active games and coins
 const activeGames = new Map();
@@ -38,6 +40,7 @@ module.exports = {
     ),
 
   async execute(interaction, client) {
+    const lang = await getGuildLang(interaction.guildId);
     const sub = interaction.options.getSubcommand();
     const guildId = interaction.guildId;
 
@@ -46,31 +49,31 @@ module.exports = {
       const balance = userBalances.get(targetUser.id) || 0;
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setTitle('🪙 Hangry Games Vault')
+          .setTitle(t(lang, 'hg_vault_title'))
           .setColor(0xFEE75C)
-          .setDescription(`<@${targetUser.id}> currently has **${balance} Hangry Coins**! 🪙\n\n*Earn more coins by executing other players in the arena!*`)
+          .setDescription(t(lang, 'hg_vault_desc', { user: targetUser.id, balance }))
           .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))]
       });
     }
 
     if (sub === 'cancel') {
       if (!activeGames.has(guildId)) {
-        return interaction.reply({ content: '❌ There is no active Hangry Games session running on this server.', flags: 64 });
+        return interaction.reply({ content: t(lang, 'hg_no_active_game'), flags: 64 });
       }
       activeGames.delete(guildId);
       return interaction.reply({ 
         embeds: [new EmbedBuilder()
           .setColor(0xED4245)
-          .setDescription(`❌ **Hangry Games Cancelled!**\n\nThe session has been stopped by <@${interaction.user.id}>.`)
+          .setDescription(t(lang, 'hg_cancelled_desc', { user: interaction.user.id }))
         ] 
       });
     }
 
     if (activeGames.has(guildId)) {
-      return interaction.reply({ content: '❌ A Hangry Games session is already active on this server!', flags: 64 });
+      return interaction.reply({ content: t(lang, 'hg_already_active'), flags: 64 });
     }
 
-    const prize = interaction.options.getString('prize') || 'Eternal Glory 🏆';
+    const prize = interaction.options.getString('prize') || t(lang, 'hg_default_prize');
     const sponsor = interaction.options.getUser('sponsor');
 
     if (sub === 'role') {
@@ -81,7 +84,7 @@ module.exports = {
       const membersWithRole = role.members.filter(member => !member.user.bot);
 
       if (membersWithRole.size < 2) {
-        return interaction.editReply({ content: `❌ You need at least **2 human players** with the <@&${role.id}> role!` });
+        return interaction.editReply({ content: t(lang, 'hg_role_min_players', { role: role.id }) });
       }
 
       const game = {
@@ -93,8 +96,8 @@ module.exports = {
       };
 
       activeGames.set(guildId, game);
-      await interaction.editReply({ content: `⚔️ **Instant Match Triggered!** Grabbing everyone with the <@&${role.id}> role...` });
-      return module.exports.runGameSimulation(interaction, game);
+      await interaction.editReply({ content: t(lang, 'hg_instant_match', { role: role.id }) });
+      return module.exports.runGameSimulation(interaction, game, lang);
     }
 
     if (sub === 'new' || sub === 'giveaway') {
@@ -107,67 +110,68 @@ module.exports = {
       });
 
       const lobbyRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`hg_join_${guildId}`).setLabel('Join').setEmoji('🍔').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`hg_tributes_${guildId}`).setLabel('Tributes').setEmoji('⚔️').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`hg_start_${guildId}`).setLabel('Start Game').setEmoji('🍴').setStyle(ButtonStyle.Primary)
+        new ButtonBuilder().setCustomId(`hg_join_${guildId}`).setLabel(t(lang, 'hg_btn_join')).setEmoji('🍔').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`hg_tributes_${guildId}`).setLabel(t(lang, 'hg_btn_tributes')).setEmoji('⚔️').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`hg_start_${guildId}`).setLabel(t(lang, 'hg_btn_start')).setEmoji('🍴').setStyle(ButtonStyle.Primary)
       );
 
       const embed = new EmbedBuilder()
-        .setTitle(`🍔 Oscar's Hangry Games 🍔`)
+        .setTitle(`🍔 ${t(lang, 'hg_title')} 🍔`)
         .setColor(0xFEE75C)
-        .setDescription(`**Phase 1 - Gathering Tributes!**\n\nClick **Join** 🍔 to enter the arena!\n\n⚔️ **0 tributes have volunteered so far.**`)
+        .setDescription(t(lang, 'hg_lobby_desc', { count: 0 }))
         .addFields(
-          { name: '🎁 Prize', value: prize, inline: true },
-          { name: '📣 Sponsor', value: sponsor ? `<@${sponsor.id}>` : `<@${interaction.user.id}>`, inline: true }
+          { name: `🎁 ${t(lang, 'prize')}`, value: prize, inline: true },
+          { name: `📣 ${t(lang, 'sponsor')}`, value: sponsor ? `<@${sponsor.id}>` : `<@${interaction.user.id}>`, inline: true }
         )
-        .setFooter({ text: 'Only the host or administrators can click Start.' });
+        .setFooter({ text: t(lang, 'hg_lobby_footer') });
 
       await interaction.reply({ embeds: [embed], components: [lobbyRow] });
     }
   },
 
   async handleButton(interaction, client) {
+    const lang = await getGuildLang(interaction.guildId);
     const customId = interaction.customId;
     const guildId = interaction.guildId;
     const game = activeGames.get(guildId);
 
-    if (!game) return interaction.reply({ content: '❌ This session has already expired or been cancelled.', flags: 64 });
+    if (!game) return interaction.reply({ content: t(lang, 'hg_expired_session'), flags: 64 });
 
     if (customId === `hg_join_${guildId}`) {
       const userId = interaction.user.id;
       if (game.players.has(userId)) {
         game.players.delete(userId);
-        await interaction.reply({ content: '🏃‍♂️ You backed out of the Hangry Games.', flags: 64 });
+        await interaction.reply({ content: t(lang, 'hg_backed_out'), flags: 64 });
       } else {
         game.players.add(userId);
-        await interaction.reply({ content: '🍔 You have volunteered! Good luck!', flags: 64 });
+        await interaction.reply({ content: t(lang, 'hg_volunteered'), flags: 64 });
       }
 
       const count = game.players.size;
       const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
-        .setDescription(`**Phase 1 - Gathering Tributes!**\n\nClick **Join** 🍔 to enter the arena!\n\n⚔️ **${count} ${count === 1 ? 'tribute has' : 'tributes have'} volunteered so far.**`);
+        .setDescription(t(lang, 'hg_lobby_desc', { count }));
       await interaction.message.edit({ embeds: [updatedEmbed] });
     }
 
     if (customId === `hg_tributes_${guildId}`) {
-      if (game.players.size === 0) return interaction.reply({ content: 'There are no tributes registered yet!', flags: 64 });
+      if (game.players.size === 0) return interaction.reply({ content: t(lang, 'hg_no_tributes'), flags: 64 });
       const playerMentions = Array.from(game.players).map(id => `<@${id}>`).join('\n');
-      await interaction.reply({ embeds: [new EmbedBuilder().setTitle('⚔️ Registered Tributes').setColor(0x5865F2).setDescription(playerMentions)], flags: 64 });
+      await interaction.reply({ embeds: [new EmbedBuilder().setTitle(`⚔️ ${t(lang, 'hg_registered_tributes')}`).setColor(0x5865F2).setDescription(playerMentions)], flags: 64 });
     }
 
     if (customId === `hg_start_${guildId}`) {
       if (interaction.user.id !== game.hostId && !interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-        return interaction.reply({ content: '⚠️ Only the host or staff members can begin.', flags: 64 });
+        return interaction.reply({ content: t(lang, 'hg_only_host_staff'), flags: 64 });
       }
-      if (game.players.size < 2) return interaction.reply({ content: '❌ You need at least **2 tributes** to start!', flags: 64 });
+      if (game.players.size < 2) return interaction.reply({ content: t(lang, 'hg_min_tributes'), flags: 64 });
 
       game.status = 'playing';
-      await interaction.update({ content: '⚙️ *Starting engines... Preparing a match...*', embeds: [], components: [] });
-      module.exports.runGameSimulation(interaction, game);
+      await interaction.update({ content: t(lang, 'hg_starting_engines'), embeds: [], components: [] });
+      return module.exports.runGameSimulation(interaction, game, lang);
     }
   },
 
-  async runGameSimulation(interaction, game) {
+  async runGameSimulation(interaction, game, lang) {
     const channel = interaction.channel;
     const guildId = interaction.guildId;
     let survivors = Array.from(game.players);
@@ -178,7 +182,6 @@ module.exports = {
     const VOTE_COST = 150;
     const REQUIRED_VOTES_TO_SAVE = 3;
 
-    // --- EVENTS POOL ---
     const soloDeaths = [
       "**{player1}** choked on an incredibly dry cracker! 🥖", 
       "**{player1}** slipped on a huge glob of mayonnaise and tumbled into the abyss! 🍟",
@@ -293,9 +296,9 @@ module.exports = {
 
     await channel.send({
       embeds: [new EmbedBuilder()
-        .setTitle('🏁 The Hangry Games Have Begun!')
+        .setTitle(t(lang, 'hg_begun_title'))
         .setColor(0xED4245)
-        .setDescription(`**${survivors.length} tributes** step up to the dining table. Let the bloodbath begin!`)
+        .setDescription(t(lang, 'hg_begun_desc', { count: survivors.length }))
       ]
     });
     await sleep(4000);
@@ -306,9 +309,9 @@ module.exports = {
       const listMentions = survivors.map(id => `• <@${id}>`).join('\n');
       await channel.send({
         embeds: [new EmbedBuilder()
-          .setTitle(`🍔 ${survivors.length} hangry people remaining!`)
+          .setTitle(t(lang, 'hg_remaining_title', { count: survivors.length }))
           .setColor(0x2F3136)
-          .setDescription(`\`\`\`md\n# Survivors Round ${round}\n\`\`\`\n${listMentions}`)
+          .setDescription(`\`\`\`md\n${t(lang, 'hg_survivors_round', { round })}\n\`\`\`\n${listMentions}`)
         ]
       });
       await sleep(3500);
@@ -353,14 +356,14 @@ module.exports = {
           } catch(err){}
 
           const voteRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`vote_${player1}`).setLabel(`Save ${u1Name}`).setStyle(ButtonStyle.Primary).setEmoji('🛡️'),
-            new ButtonBuilder().setCustomId(`vote_${player2}`).setLabel(`Save ${u2Name}`).setStyle(ButtonStyle.Primary).setEmoji('🛡️')
+            new ButtonBuilder().setCustomId(`vote_${player1}`).setLabel(t(lang, 'hg_btn_save', { name: u1Name })).setStyle(ButtonStyle.Primary).setEmoji('🛡️'),
+            new ButtonBuilder().setCustomId(`vote_${player2}`).setLabel(t(lang, 'hg_btn_save', { name: u2Name })).setStyle(ButtonStyle.Primary).setEmoji('🛡️')
           );
 
           const voteEmbed = new EmbedBuilder()
-            .setTitle('👀 The Dead got picky about the menu...')
+            .setTitle(t(lang, 'hg_vote_title'))
             .setColor(0x5865F2)
-            .setDescription(`**The arena is hungry!**\n\nChoose who you want to **save** from death! Voting costs **${VOTE_COST} Coins**.\n\n🛡️ **${u1Name}**: 0 votes\n🛡️ **${u2Name}**: 0 votes\n\n*If a player reaches **${REQUIRED_VOTES_TO_SAVE} votes**, BOTH shall live! Otherwise, the one with fewer votes is executed.*`);
+            .setDescription(t(lang, 'hg_vote_desc', { cost: VOTE_COST, u1: u1Name, u2: u2Name, required: REQUIRED_VOTES_TO_SAVE }));
 
           const voteMessage = await channel.send({ embeds: [voteEmbed], components: [voteRow] });
 
@@ -372,22 +375,22 @@ module.exports = {
             const voterId = btnInteraction.user.id;
 
             if (voterId === targetId) {
-              return btnInteraction.reply({ content: '❌ You cannot use coins to save yourself!', flags: 64 });
+              return btnInteraction.reply({ content: t(lang, 'hg_vote_self'), flags: 64 });
             }
 
             const voterBalance = userBalances.get(voterId) || 0;
             if (voterBalance < VOTE_COST) {
-              return btnInteraction.reply({ content: `❌ You do not have enough coins! A vote costs **${VOTE_COST} Coins**.`, flags: 64 });
+              return btnInteraction.reply({ content: t(lang, 'hg_vote_no_coins', { cost: VOTE_COST }), flags: 64 });
             }
 
             userBalances.set(voterId, voterBalance - VOTE_COST);
             votes[targetId]++;
 
             const updatedEmbed = EmbedBuilder.from(voteMessage.embeds[0])
-              .setDescription(`**The arena is hungry!**\n\nChoose who you want to **save** from death! Voting costs **${VOTE_COST} Coins**.\n\n🛡️ **${u1Name}**: ${votes[player1]} votes\n🛡️ **${u2Name}**: ${votes[player2]} votes`);
+              .setDescription(t(lang, 'hg_vote_desc_updated', { cost: VOTE_COST, u1: u1Name, u2: u2Name, v1: votes[player1], v2: votes[player2] }));
             
             await voteMessage.edit({ embeds: [updatedEmbed] });
-            await btnInteraction.reply({ content: `✅ You spent ${VOTE_COST} coins to help save <@${targetId}>!`, flags: 64 });
+            await btnInteraction.reply({ content: t(lang, 'hg_vote_success', { cost: VOTE_COST, user: targetId }), flags: 64 });
           });
 
           await new Promise(resolve => collector.on('end', resolve));
@@ -395,9 +398,9 @@ module.exports = {
           let resultEmbed = new EmbedBuilder();
 
           if (votes[player1] >= REQUIRED_VOTES_TO_SAVE || votes[player2] >= REQUIRED_VOTES_TO_SAVE) {
-            resultEmbed.setTitle('👀 Both shall live!')
+            resultEmbed.setTitle(t(lang, 'hg_both_live_title'))
               .setColor(0x57F287)
-              .setDescription(`The community gathered enough coins! Both **${u1Name}** and **${u2Name}** shall live to fight another day! 🌤️`);
+              .setDescription(t(lang, 'hg_both_live_desc', { u1: u1Name, u2: u2Name }));
             pool.push(player1, player2);
           } else {
             let loser = player1;
@@ -415,12 +418,11 @@ module.exports = {
             const currentBal = userBalances.get(winner) || 0;
             userBalances.set(winner, currentBal + COINS_PER_KILL);
 
-            resultEmbed.setTitle('🪓 Elimination Result!')
+            resultEmbed.setTitle(t(lang, 'hg_elimination_title'))
               .setColor(0xED4245)
-              .setDescription(`**<@${winner}>** executed **<@${loser}>** because the voting goal was not reached!\n\n🪙 **<@${winner}> earns +${COINS_PER_KILL} Hangry Coins!**`);
+              .setDescription(t(lang, 'hg_elimination_desc', { winner, loser, coins: COINS_PER_KILL }));
             
             try {
-              // FIX VOOR VOTE: Pakt de profielfoto van de verliezer (degene die doodgaat)
               const deadUser = await interaction.client.users.fetch(loser);
               resultEmbed.setThumbnail(deadUser.displayAvatarURL({ dynamic: true, size: 256 }));
             } catch(err){}
@@ -451,7 +453,6 @@ module.exports = {
           let eventText = "";
 
           if (Math.random() < 0.5) {
-            // GEVECHT: Player1 vermoordt Player2
             eventText = combatEvents[Math.floor(Math.random() * combatEvents.length)]
               .replace(/{player1}/g, `<@${player1}>`).replace(/{player2}/g, `<@${player2}>`);
             deadThisRound.add(player2);
@@ -461,18 +462,15 @@ module.exports = {
             userBalances.set(player1, currentBal + COINS_PER_KILL);
             
             try {
-              // FIX: Dit haalt nu specifiek de profielfoto van PLAYER 2 (het slachtoffer) op!
               const victimUser = await interaction.client.users.fetch(player2);
               embed.setThumbnail(victimUser.displayAvatarURL({ dynamic: true, size: 256 }));
             } catch (err) { console.error(err); }
           } else {
-            // ACCIDENT: Player1 gaat in z'n eentje dood
             eventText = soloDeaths[Math.floor(Math.random() * soloDeaths.length)].replace(/{player1}/g, `<@${player1}>`);
             deadThisRound.add(player1);
             pool.push(player2);
 
             try {
-              // Hier gaat Player1 dood, dus z'n eigen pfp is correct
               const user = await interaction.client.users.fetch(player1);
               embed.setThumbnail(user.displayAvatarURL({ dynamic: true, size: 256 }));
             } catch (err) { console.error(err); }
@@ -498,17 +496,17 @@ module.exports = {
     const winnerId = survivors[0];
     const sponsorText = game.sponsorId ? `<@${game.sponsorId}>` : `<@${game.hostId}>`;
     let winnerEmbed = new EmbedBuilder()
-      .setTitle('👑 We have a survivor! 👑')
+      .setTitle(t(lang, 'hg_winner_title'))
       .setColor(0x57F287)
-      .setDescription(`🏆 **CONGRATULATIONS <@${winnerId}>!** 🏆\n\nYou are the last one standing after an absolute bloodbath!\n\n🎁 **Prize:** ${game.prize}\n📣 **Sponsor:** ${sponsorText}`)
-      .setFooter({ text: "Thanks for playing Oscar's Hangry Games!" });
+      .setDescription(t(lang, 'hg_winner_desc', { winner: winnerId, prize: game.prize, sponsor: sponsorText }))
+      .setFooter({ text: t(lang, 'hg_winner_footer') });
 
     try {
       const winnerUser = await interaction.client.users.fetch(winnerId);
       winnerEmbed.setThumbnail(winnerUser.displayAvatarURL({ dynamic: true, size: 512 }));
     } catch (err) { console.error(err); }
 
-    await channel.send({ content: `🎉 Congratulations <@${winnerId}>!`, embeds: [winnerEmbed] });
+    await channel.send({ content: t(lang, 'hg_winner_congrats', { winner: winnerId }), embeds: [winnerEmbed] });
     activeGames.delete(guildId);
   }
 };

@@ -1,4 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { t } = require('../locales');
+const { getGuildLang } = require('../utils/getLang');
 
 // In-memory store voor polls: messageId -> { yes: Set, no: Set, question, author }
 const activePolls = new Map();
@@ -13,24 +15,25 @@ module.exports = {
         .setRequired(true)),
 
   async execute(interaction) {
+    const lang = await getGuildLang(interaction.guildId);
     const question = interaction.options.getString('question');
 
     const embed = new EmbedBuilder()
-      .setTitle('📊 New Poll')
-      .setDescription(`**${question}**\n\n✅ **Yes:** 0\n❌ **No:** 0`)
+      .setTitle(`📊 ${t(lang, 'poll_title')}`)
+      .setDescription(`**${question}**\n\n✅ **${t(lang, 'poll_yes')}:** 0\n❌ **${t(lang, 'poll_no')}:** 0`)
       .setColor(0x5865F2)
-      .setFooter({ text: `Started by ${interaction.user.username}` })
+      .setFooter({ text: t(lang, 'poll_footer', { user: interaction.user.username }) })
       .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('poll_yes')
-        .setLabel('Yes')
+        .setLabel(t(lang, 'poll_yes'))
         .setStyle(ButtonStyle.Success)
         .setEmoji('✅'),
       new ButtonBuilder()
         .setCustomId('poll_no')
-        .setLabel('No')
+        .setLabel(t(lang, 'poll_no'))
         .setStyle(ButtonStyle.Danger)
         .setEmoji('❌')
     );
@@ -47,9 +50,10 @@ module.exports = {
   },
 
   async handleButton(interaction) {
+    const lang = await getGuildLang(interaction.guildId);
     const poll = activePolls.get(interaction.message.id);
     if (!poll) {
-      return interaction.reply({ content: '⚠️ This poll is no longer active.', flags: 64 });
+      return interaction.reply({ content: t(lang, 'poll_inactive'), flags: 64 });
     }
 
     const userId = interaction.user.id;
@@ -71,7 +75,8 @@ module.exports = {
     }
 
     const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
-      .setDescription(`**${poll.question}**\n\n✅ **Yes:** ${poll.yes.size}\n❌ **No:** ${poll.no.size}`);
+      .setTitle(`📊 ${t(lang, 'poll_title')}`)
+      .setDescription(`**${poll.question}**\n\n✅ **${t(lang, 'poll_yes')}:** ${poll.yes.size}\n❌ **${t(lang, 'poll_no')}:** ${poll.no.size}`);
 
     await interaction.update({ embeds: [updatedEmbed] });
   }

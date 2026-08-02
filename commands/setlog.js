@@ -28,7 +28,7 @@ module.exports = {
     );
 
     const embed = new EmbedBuilder()
-      .setTitle('✅ Logging Channel Configured')
+      .setTitle(`✅ ${t(lang, 'setlog_title')}`)
       .setColor(0x00cc66)
       .setDescription(t(lang, 'log_channel_set', { channel: `<#${channel.id}>` }))
       .setTimestamp();

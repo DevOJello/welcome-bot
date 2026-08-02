@@ -1,5 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const pool = require('../database');
+const { t } = require('../locales');
+const { getGuildLang } = require('../utils/getLang');
 
 async function initDB() {
   await pool.query(`
@@ -20,20 +22,17 @@ module.exports = {
     .setName('warn')
     .setDescription('Warning system')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
-
     .addSubcommand(sub =>
       sub.setName('add')
         .setDescription('Give a warning to a member')
         .addUserOption(opt => opt.setName('user').setDescription('Member to warn').setRequired(true))
         .addStringOption(opt => opt.setName('reason').setDescription('Reason for the warning').setRequired(true))
     )
-
     .addSubcommand(sub =>
       sub.setName('remove')
         .setDescription('Remove a warning by ID')
         .addIntegerOption(opt => opt.setName('id').setDescription('Warning ID to remove').setRequired(true))
     )
-
     .addSubcommand(sub =>
       sub.setName('list')
         .setDescription('View all warnings for a user')
@@ -41,8 +40,9 @@ module.exports = {
     ),
 
   async execute(interaction, client) {
+    const lang = await getGuildLang(interaction.guildId);
     const guild = interaction.guild;
-    if (!guild) return interaction.reply({ content: '⚠️ This command can only be used inside a server.', flags: 64 });
+    if (!guild) return interaction.reply({ content: t(lang, 'guild_only_command'), flags: 64 });
 
     const sub = interaction.options.getSubcommand();
 
@@ -52,10 +52,10 @@ module.exports = {
       const reason = interaction.options.getString('reason');
 
       if (target.id === interaction.user.id) {
-        return interaction.reply({ content: '⚠️ You cannot warn yourself.', flags: 64 });
+        return interaction.reply({ content: t(lang, 'warn_cannot_self'), flags: 64 });
       }
       if (target.bot) {
-        return interaction.reply({ content: '⚠️ You cannot warn a bot.', flags: 64 });
+        return interaction.reply({ content: t(lang, 'warn_cannot_bot'), flags: 64 });
       }
 
       const { rows } = await pool.query(`
@@ -65,46 +65,41 @@ module.exports = {
 
       const warning = rows[0];
 
-      // Count total warnings for this user
       const { rows: countRows } = await pool.query(
         `SELECT COUNT(*) FROM warnings WHERE guild_id = $1 AND user_id = $2`,
         [guild.id, target.id]
       );
       const totalWarns = parseInt(countRows[0].count);
 
-      // Track in staff_stats
       try {
         const { incrementStat } = require('./staffstats');
         await incrementStat(interaction.user.id, guild.id, 'warns_given');
       } catch {}
 
-      // Try to DM the warned user
       try {
         await target.send({
           embeds: [new EmbedBuilder()
-            .setTitle(`⚠️ You have been warned in ${guild.name}`)
+            .setTitle(t(lang, 'warn_dm_title', { guild: guild.name }))
             .setColor(0xff9900)
             .addFields(
-              { name: '📝 Reason', value: reason },
-              { name: '🔢 Warning ID', value: `#${warning.id}`, inline: true },
-              { name: '📊 Total Warnings', value: `${totalWarns}`, inline: true },
+              { name: `📝 ${t(lang, 'reason')}`, value: reason },
+              { name: `🔢 ${t(lang, 'warn_id')}`, value: `#${warning.id}`, inline: true },
+              { name: `📊 ${t(lang, 'warn_total')}`, value: `${totalWarns}`, inline: true }
             )
             .setTimestamp()]
         });
-      } catch {
-        // DMs disabled, continue silently
-      }
+      } catch {}
 
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setTitle('⚠️ Warning Issued')
+          .setTitle(`⚠️ ${t(lang, 'warn_added_title')}`)
           .setColor(0xff9900)
           .addFields(
-            { name: '👤 User', value: `<@${target.id}>`, inline: true },
-            { name: '🔢 Warning ID', value: `#${warning.id}`, inline: true },
-            { name: '📊 Total Warnings', value: `${totalWarns}`, inline: true },
-            { name: '📝 Reason', value: reason },
-            { name: '👮 Warned by', value: `<@${interaction.user.id}>`, inline: true },
+            { name: `👤 ${t(lang, 'user')}`, value: `<@${target.id}>`, inline: true },
+            { name: `🔢 ${t(lang, 'warn_id')}`, value: `#${warning.id}`, inline: true },
+            { name: `📊 ${t(lang, 'warn_total')}`, value: `${totalWarns}`, inline: true },
+            { name: `📝 ${t(lang, 'reason')}`, value: reason },
+            { name: `👮 ${t(lang, 'warned_by_label')}`, value: `<@${interaction.user.id}>`, inline: true }
           )
           .setTimestamp()]
       });
@@ -120,7 +115,7 @@ module.exports = {
       );
 
       if (rows.length === 0) {
-        return interaction.reply({ content: `⚠️ Warning #${id} not found in this server.`, flags: 64 });
+        return interaction.reply({ content: t(lang, 'warn_not_found', { id }), flags: 64 });
       }
 
       const warning = rows[0];
@@ -128,10 +123,10 @@ module.exports = {
 
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setTitle('🗑️ Warning Removed')
+          .setTitle(`🗑️ ${t(lang, 'warn_removed_title')}`)
           .setColor(0x00cc66)
-          .setDescription(`Warning **#${id}** has been removed.\n\n**User:** <@${warning.user_id}>\n**Reason was:** ${warning.reason}`)
-          .setFooter({ text: `Removed by ${interaction.user.username}` })
+          .setDescription(t(lang, 'warn_removed_desc', { id, user: warning.user_id, reason: warning.reason }))
+          .setFooter({ text: t(lang, 'removed_by', { user: interaction.user.username }) })
           .setTimestamp()]
       });
     }
@@ -149,21 +144,21 @@ module.exports = {
         return interaction.reply({
           embeds: [new EmbedBuilder()
             .setColor(0x00cc66)
-            .setDescription(`✅ <@${target.id}> has no warnings in this server.`)]
+            .setDescription(t(lang, 'warn_none', { user: target.id }))]
         });
       }
 
       const lines = rows.map(w =>
-        `**#${w.id}** — ${w.reason}\n> By <@${w.staff_id}> • <t:${Math.floor(new Date(w.created_at).getTime() / 1000)}:R>`
+        `**#${w.id}** — ${w.reason}\n> ${t(lang, 'warn_line_info', { staff: w.staff_id, time: Math.floor(new Date(w.created_at).getTime() / 1000) })}`
       ).join('\n\n');
 
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setTitle(`⚠️ Warnings for ${target.username}`)
+          .setTitle(t(lang, 'warn_list_title', { user: target.username }))
           .setColor(0xff9900)
           .setThumbnail(target.displayAvatarURL({ extension: 'png', size: 256 }))
           .setDescription(lines.slice(0, 4000))
-          .setFooter({ text: `Total: ${rows.length} warning${rows.length !== 1 ? 's' : ''}` })
+          .setFooter({ text: t(lang, 'warn_list_footer', { count: rows.length }) })
           .setTimestamp()]
       });
     }

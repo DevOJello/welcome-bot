@@ -1,5 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, ChannelType, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const pool = require('../database');
+const { t } = require('../locales');
+const { getGuildLang } = require('../utils/getLang');
 
 async function initDB() {
   await pool.query(`
@@ -58,7 +60,7 @@ async function getConfig(guildId) {
   return rows[0] || null;
 }
 
-async function generateTranscript(channel) {
+async function generateTranscript(channel, lang) {
   let allMessages = [];
   let lastId = null;
   while (true) {
@@ -71,7 +73,7 @@ async function generateTranscript(channel) {
     if (batch.size < 100) break;
   }
   const sorted = allMessages.reverse();
-  const header = `Ticket Transcript — #${channel.name}\nTotal messages: ${sorted.length}\n${'─'.repeat(50)}\n\n`;
+  const header = `${t(lang, 'ticket_transcript_header', { name: channel.name, count: sorted.length })}\n${'─'.repeat(50)}\n\n`;
   const lines = sorted.map(m => {
     const time = m.createdAt.toISOString().replace('T', ' ').slice(0, 19);
     const parts = [];
@@ -80,14 +82,15 @@ async function generateTranscript(channel) {
     if (m.embeds.length > 0) parts.push(`[${m.embeds.length} embed(s): ${m.embeds.map(e => e.title || e.description?.slice(0, 50) || 'embed').join(' | ')}]`);
     return `[${time}] ${m.author.tag}: ${parts.join(' ') || '[empty]'}`;
   }).join('\n');
-  return header + (lines || 'No messages.');
+  return header + (lines || t(lang, 'ticket_no_messages'));
 }
 
 async function saveTranscriptAndDelete(channel, guild, ticket, closedById, client) {
+  const lang = await getGuildLang(guild.id);
   const config = await getConfig(guild.id);
   if (config?.transcript_channel_id) {
     try {
-      const transcript = await generateTranscript(channel);
+      const transcript = await generateTranscript(channel, lang);
       const transcriptChannel = guild.channels.cache.get(config.transcript_channel_id);
       if (transcriptChannel) {
         const buffer = Buffer.from(transcript, 'utf8');
@@ -99,20 +102,20 @@ async function saveTranscriptAndDelete(channel, guild, ticket, closedById, clien
 
         const ratingField = ticket.rating
           ? `${'⭐'.repeat(ticket.rating)} (${ticket.rating}/5)${ticket.rating_reason ? `\n> ${ticket.rating_reason}` : ''}`
-          : '*No rating yet*';
+          : t(lang, 'ticket_no_rating_yet');
 
         await transcriptChannel.send({
           embeds: [new EmbedBuilder()
-            .setTitle('📋 Ticket Transcript')
+            .setTitle(`📋 ${t(lang, 'ticket_transcript_title')}`)
             .setColor(0x5865f2)
             .addFields(
-              { name: '🎫 Ticket', value: `#${channel.name}`, inline: true },
-              { name: '📂 Category', value: ticket.ticket_type || 'General', inline: true },
-              { name: '👤 Opened by', value: `<@${ticket.user_id}>`, inline: true },
-              { name: '🔒 Closed by', value: closedByUser ? `<@${closedByUser.id}>` : 'Unknown', inline: true },
-              { name: '🛡️ Claimed by', value: claimedByUser ? `<@${claimedByUser.id}>` : '*Unclaimed*', inline: true },
-              { name: '⭐ Rating', value: ratingField, inline: false },
-              { name: '📅 Opened', value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:F>`, inline: true },
+              { name: `🎫 ${t(lang, 'ticket_label')}`, value: `#${channel.name}`, inline: true },
+              { name: `📂 ${t(lang, 'ticket_category')}`, value: ticket.ticket_type || 'General', inline: true },
+              { name: `👤 ${t(lang, 'ticket_opened_by')}`, value: `<@${ticket.user_id}>`, inline: true },
+              { name: `🔒 ${t(lang, 'ticket_closed_by')}`, value: closedByUser ? `<@${closedByUser.id}>` : t(lang, 'ticket_unknown'), inline: true },
+              { name: `🛡️ ${t(lang, 'ticket_claimed_by')}`, value: claimedByUser ? `<@${claimedByUser.id}>` : `*${t(lang, 'ticket_unclaimed')}*`, inline: true },
+              { name: `⭐ ${t(lang, 'ticket_rating')}`, value: ratingField, inline: false },
+              { name: `📅 ${t(lang, 'ticket_opened_on')}`, value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:F>`, inline: true },
             )
             .setTimestamp()],
           files: [attachment]
@@ -138,10 +141,10 @@ async function saveTranscriptAndDelete(channel, guild, ticket, closedById, clien
         );
         await ticketUser.send({
           embeds: [new EmbedBuilder()
-            .setTitle('⭐ Rate your support experience')
+            .setTitle(`⭐ ${t(lang, 'ticket_rate_title')}`)
             .setColor(0xffd700)
-            .setDescription(`Your ticket in **${guild.name}** has been closed.\n\nHow would you rate the support you received from <@${ticket.claimed_by}>?\n\nClick a star rating below:`)
-            .setFooter({ text: 'Ratings below 3 stars will ask for a short explanation' })],
+            .setDescription(t(lang, 'ticket_rate_desc', { guild: guild.name, claimed_by: ticket.claimed_by }))
+            .setFooter({ text: t(lang, 'ticket_rate_footer') })],
           components: [ratingRow]
         });
         await pool.query(`UPDATE tickets SET status = 'awaiting_rating', closed_by = $1 WHERE id = $2`, [closedById, ticket.id]);
@@ -197,7 +200,7 @@ module.exports = {
     )
     .addSubcommand(sub =>
       sub.setName('types')
-        .setDescription('Set up to 5 ticket categories shown as buttons on the panel (e.g. General, Shop)')
+        .setDescription('Set up to 5 ticket categories shown as buttons on the panel')
         .addStringOption(opt => opt.setName('type1').setDescription('e.g. 🎫 General Support').setRequired(true))
         .addStringOption(opt => opt.setName('type2').setDescription('e.g. 🛒 Shop Support').setRequired(false))
         .addStringOption(opt => opt.setName('type3').setDescription('Category 3').setRequired(false))
@@ -242,7 +245,9 @@ module.exports = {
   async execute(interaction, client) {
     schedulerClient = client;
     const guild = interaction.guild;
-    if (!guild) return interaction.reply({ content: '⚠️ This command can only be used inside a server.', flags: 64 });
+    const lang = await getGuildLang(interaction.guildId);
+
+    if (!guild) return interaction.reply({ content: t(lang, 'guild_only_command'), flags: 64 });
     const sub = interaction.options.getSubcommand();
 
     // ── SETUP ────────────────────────────────────────────────────────────────
@@ -256,13 +261,13 @@ module.exports = {
         ON CONFLICT (guild_id) DO UPDATE SET staff_role_id=$2, transcript_channel_id=$3, category_id=$4, updated_at=NOW()
       `, [guild.id, staffRole.id, transcriptChannel.id, category?.id || null]);
       return interaction.reply({
-        embeds: [new EmbedBuilder().setTitle('✅ Ticket System Configured!').setColor(0x00cc66)
+        embeds: [new EmbedBuilder().setTitle(`✅ ${t(lang, 'ticket_setup_title')}`).setColor(0x00cc66)
           .addFields(
-            { name: '👥 Staff Role', value: `<@&${staffRole.id}>`, inline: true },
-            { name: '📋 Transcript Channel', value: `<#${transcriptChannel.id}>`, inline: true },
-            { name: '📁 Category', value: category ? category.name : 'Default', inline: true },
+            { name: `👥 ${t(lang, 'ticket_staff_role')}`, value: `<@&${staffRole.id}>`, inline: true },
+            { name: `📋 ${t(lang, 'ticket_transcript_chan')}`, value: `<#${transcriptChannel.id}>`, inline: true },
+            { name: `📁 ${t(lang, 'ticket_category')}`, value: category ? category.name : t(lang, 'ticket_default'), inline: true },
           )
-          .setFooter({ text: 'Use /ticket types next to set up ticket categories' })]
+          .setFooter({ text: t(lang, 'ticket_setup_footer') })]
       });
     }
 
@@ -273,27 +278,27 @@ module.exports = {
         .filter(Boolean);
 
       const config = await getConfig(guild.id);
-      if (!config) return interaction.reply({ content: '⚠️ Run `/ticket setup` first.', flags: 64 });
+      if (!config) return interaction.reply({ content: t(lang, 'ticket_not_setup'), flags: 64 });
 
       await pool.query(`UPDATE ticket_config SET ticket_types = $1, updated_at = NOW() WHERE guild_id = $2`, [JSON.stringify(types), guild.id]);
 
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setTitle('✅ Ticket Categories Set')
+          .setTitle(`✅ ${t(lang, 'ticket_types_title')}`)
           .setColor(0x00cc66)
           .setDescription(types.map((t, i) => `${i + 1}. ${t}`).join('\n'))
-          .setFooter({ text: 'Use /ticket panel to post the button panel' })]
+          .setFooter({ text: t(lang, 'ticket_types_footer') })]
       });
     }
 
     // ── PANEL ────────────────────────────────────────────────────────────────
     if (sub === 'panel') {
       const config = await getConfig(guild.id);
-      if (!config) return interaction.reply({ content: '⚠️ Set up with `/ticket setup` first.', flags: 64 });
+      if (!config) return interaction.reply({ content: t(lang, 'ticket_not_setup'), flags: 64 });
       const channel = interaction.options.getChannel('channel');
-      const message = interaction.options.getString('message') || 'Need help? Click a button below to open the right kind of support ticket.';
+      const message = interaction.options.getString('message') || t(lang, 'ticket_panel_desc');
 
-      const types = (config.ticket_types && config.ticket_types.length > 0) ? config.ticket_types : ['🎫 General Support'];
+      const types = (config.ticket_types && config.ticket_types.length > 0) ? config.ticket_types : [t(lang, 'ticket_gen_support')];
       const row = new ActionRowBuilder().addComponents(
         ...types.slice(0, 5).map((type, i) =>
           new ButtonBuilder()
@@ -304,39 +309,39 @@ module.exports = {
       );
 
       await channel.send({
-        embeds: [new EmbedBuilder().setTitle('🎫 Support Tickets').setColor(0x5865f2).setDescription(message)
-          .addFields({ name: '📂 Categories', value: types.map(t => `• ${t}`).join('\n') })
-          .setFooter({ text: 'One ticket per person • Misuse may result in a ban' })],
+        embeds: [new EmbedBuilder().setTitle(`🎫 ${t(lang, 'ticket_panel_title')}`).setColor(0x5865f2).setDescription(message)
+          .addFields({ name: `📂 ${t(lang, 'ticket_categories')}`, value: types.map(ty => `• ${ty}`).join('\n') })
+          .setFooter({ text: t(lang, 'ticket_panel_footer') })],
         components: [row]
       });
-      return interaction.reply({ content: `✅ Panel sent to <#${channel.id}>!`, flags: 64 });
+      return interaction.reply({ content: t(lang, 'ticket_panel_success', { channel: channel.id }), flags: 64 });
     }
 
     // ── CLAIM ────────────────────────────────────────────────────────────────
     if (sub === 'claim') {
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id=$1 AND status='open'`, [interaction.channelId]);
-      if (!rows[0]) return interaction.reply({ content: '⚠️ This is not an active ticket channel.', flags: 64 });
+      if (!rows[0]) return interaction.reply({ content: t(lang, 'ticket_not_active'), flags: 64 });
       const ticket = rows[0];
-      if (ticket.claimed_by) return interaction.reply({ content: `⚠️ This ticket is already claimed by <@${ticket.claimed_by}>.`, flags: 64 });
+      if (ticket.claimed_by) return interaction.reply({ content: t(lang, 'ticket_already_claimed', { user: ticket.claimed_by }), flags: 64 });
       await pool.query(`UPDATE tickets SET claimed_by=$1 WHERE id=$2`, [interaction.user.id, ticket.id]);
       return interaction.reply({
         embeds: [new EmbedBuilder().setColor(0x00cc66)
-          .setDescription(`✅ <@${interaction.user.id}> has claimed this ticket and is now handling it.\n\nOther staff can relax — this one's covered!`)]
+          .setDescription(t(lang, 'ticket_claimed_msg', { user: interaction.user.id }))]
       });
     }
 
     // ── UNCLAIM ──────────────────────────────────────────────────────────────
     if (sub === 'unclaim') {
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id=$1 AND status='open'`, [interaction.channelId]);
-      if (!rows[0]) return interaction.reply({ content: '⚠️ This is not an active ticket channel.', flags: 64 });
+      if (!rows[0]) return interaction.reply({ content: t(lang, 'ticket_not_active'), flags: 64 });
       await pool.query(`UPDATE tickets SET claimed_by=NULL WHERE id=$1`, [rows[0].id]);
-      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xff9900).setDescription(`🔓 Ticket unclaimed — available for any staff to take.`)] });
+      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xff9900).setDescription(`🔓 ${t(lang, 'ticket_unclaimed_msg')}`)] });
     }
 
     // ── CLOSE ────────────────────────────────────────────────────────────────
     if (sub === 'close') {
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id=$1 AND status='open'`, [interaction.channelId]);
-      if (!rows[0]) return interaction.reply({ content: '⚠️ This is not an active ticket channel.', flags: 64 });
+      if (!rows[0]) return interaction.reply({ content: t(lang, 'ticket_not_active'), flags: 64 });
       const ticket = rows[0];
       try { await interaction.channel.permissionOverwrites.edit(ticket.user_id, { ViewChannel: false }); } catch {}
       await pool.query(`UPDATE tickets SET status='closed', closed_at=NOW(), closed_by=$1 WHERE id=$2`, [interaction.user.id, ticket.id]);
@@ -346,17 +351,17 @@ module.exports = {
       } catch {}
       const deleteTime = Math.floor(Date.now() / 1000) + 86400;
       const reopenRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`ticket_reopen_${interaction.channelId}`).setLabel('Reopen').setEmoji('🔓').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`ticket_delete_${interaction.channelId}`).setLabel('Delete Now').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`ticket_reopen_${interaction.channelId}`).setLabel(t(lang, 'ticket_btn_reopen')).setEmoji('🔓').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`ticket_delete_${interaction.channelId}`).setLabel(t(lang, 'ticket_btn_delete')).setEmoji('🗑️').setStyle(ButtonStyle.Danger),
       );
       return interaction.reply({
-        embeds: [new EmbedBuilder().setTitle('🔒 Ticket Closed').setColor(0xff4444)
+        embeds: [new EmbedBuilder().setTitle(`🔒 ${t(lang, 'ticket_closed_title')}`).setColor(0xff4444)
           .setDescription(
-            `Closed by <@${interaction.user.id}>.\n` +
-            (ticket.claimed_by ? `🛡️ Was handled by <@${ticket.claimed_by}>\n` : '') +
-            `\nThe opener can no longer see this channel.\n🗑️ Auto-deletes <t:${deleteTime}:R> unless reopened.`
+            `${t(lang, 'ticket_closed_by_desc', { user: interaction.user.id })}\n` +
+            (ticket.claimed_by ? `🛡️ ${t(lang, 'ticket_handled_by', { user: ticket.claimed_by })}\n` : '') +
+            `\n${t(lang, 'ticket_closed_info', { time: deleteTime })}`
           )
-          .setFooter({ text: 'Only staff can see this channel now' })],
+          .setFooter({ text: t(lang, 'ticket_closed_footer') })],
         components: [reopenRow]
       });
     }
@@ -364,29 +369,29 @@ module.exports = {
     // ── ADD / REMOVE ─────────────────────────────────────────────────────────
     if (sub === 'add') {
       const { rows } = await pool.query(`SELECT 1 FROM tickets WHERE channel_id=$1 AND status='open'`, [interaction.channelId]);
-      if (!rows[0]) return interaction.reply({ content: '⚠️ Not an active ticket.', flags: 64 });
+      if (!rows[0]) return interaction.reply({ content: t(lang, 'ticket_not_active'), flags: 64 });
       const user = interaction.options.getUser('user');
       await interaction.channel.permissionOverwrites.edit(user.id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true });
-      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x00cc66).setDescription(`✅ <@${user.id}> added to this ticket.`)] });
+      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x00cc66).setDescription(`✅ ${t(lang, 'ticket_user_added', { user: user.id })}`)] });
     }
     if (sub === 'remove') {
       const { rows } = await pool.query(`SELECT 1 FROM tickets WHERE channel_id=$1 AND status='open'`, [interaction.channelId]);
-      if (!rows[0]) return interaction.reply({ content: '⚠️ Not an active ticket.', flags: 64 });
+      if (!rows[0]) return interaction.reply({ content: t(lang, 'ticket_not_active'), flags: 64 });
       const user = interaction.options.getUser('user');
       await interaction.channel.permissionOverwrites.edit(user.id, { ViewChannel: false });
-      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xff4444).setDescription(`✅ <@${user.id}> removed from this ticket.`)] });
+      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xff4444).setDescription(`✅ ${t(lang, 'ticket_user_removed', { user: user.id })}`)] });
     }
 
     // ── RATING BAN / UNBAN ────────────────────────────────────────────────────
     if (sub === 'ratingban') {
       const user = interaction.options.getUser('user');
       await pool.query(`INSERT INTO rating_blacklist (user_id, guild_id, banned_by) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [user.id, guild.id, interaction.user.id]);
-      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xff4444).setDescription(`🚫 <@${user.id}> can no longer give star ratings.`)] });
+      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0xff4444).setDescription(`🚫 ${t(lang, 'ticket_rating_banned', { user: user.id })}`)] });
     }
     if (sub === 'ratingunban') {
       const user = interaction.options.getUser('user');
       await pool.query(`DELETE FROM rating_blacklist WHERE user_id=$1 AND guild_id=$2`, [user.id, guild.id]);
-      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x00cc66).setDescription(`✅ <@${user.id}> can give star ratings again.`)] });
+      return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x00cc66).setDescription(`✅ ${t(lang, 'ticket_rating_unbanned', { user: user.id })}`)] });
     }
 
     // ── RATINGS ──────────────────────────────────────────────────────────────
@@ -395,9 +400,8 @@ module.exports = {
       const { rows: statsRows } = await pool.query(`SELECT total_ratings, rating_sum FROM staff_stats WHERE user_id=$1 AND guild_id=$2`, [staff.id, guild.id]);
       const stats = statsRows[0] || { total_ratings: 0, rating_sum: 0 };
       const avg = stats.total_ratings > 0 ? (stats.rating_sum / stats.total_ratings).toFixed(2) : 'N/A';
-      const stars = stats.total_ratings > 0 ? '⭐'.repeat(Math.round(stats.rating_sum / stats.total_ratings)) : 'No ratings yet';
+      const stars = stats.total_ratings > 0 ? '⭐'.repeat(Math.round(stats.rating_sum / stats.total_ratings)) : t(lang, 'ticket_no_ratings_yet');
 
-      // Pull recent low ratings with reasons for context
       const { rows: lowRatings } = await pool.query(`
         SELECT rating, rating_reason, created_at FROM tickets
         WHERE claimed_by=$1 AND guild_id=$2 AND rating IS NOT NULL AND rating <= 2
@@ -405,19 +409,19 @@ module.exports = {
       `, [staff.id, guild.id]);
 
       const embed = new EmbedBuilder()
-        .setTitle(`⭐ Rating Stats — ${staff.username}`)
+        .setTitle(`⭐ ${t(lang, 'ticket_rating_stats_title', { user: staff.username })}`)
         .setColor(0xffd700)
         .setThumbnail(staff.displayAvatarURL({ extension: 'png' }))
         .addFields(
-          { name: '⭐ Average Rating', value: `${avg}/5 ${stars}`, inline: true },
-          { name: '📊 Total Ratings', value: `${stats.total_ratings}`, inline: true },
+          { name: `⭐ ${t(lang, 'ticket_avg_rating')}`, value: `${avg}/5 ${stars}`, inline: true },
+          { name: `📊 ${t(lang, 'ticket_total_ratings')}`, value: `${stats.total_ratings}`, inline: true },
         )
         .setTimestamp();
 
       if (lowRatings.length > 0) {
         embed.addFields({
-          name: '⚠️ Recent Low Ratings',
-          value: lowRatings.map(r => `${'⭐'.repeat(r.rating)} — ${r.rating_reason || '*No reason given*'}`).join('\n\n')
+          name: `⚠️ ${t(lang, 'ticket_recent_low')}`,
+          value: lowRatings.map(r => `${'⭐'.repeat(r.rating)} — ${r.rating_reason || `*${t(lang, 'ticket_no_reason')}*`}`).join('\n\n')
         });
       }
 
@@ -427,27 +431,28 @@ module.exports = {
 
   async handleButton(interaction, client) {
     const guild = interaction.guild;
+    const lang = await getGuildLang(interaction.guildId);
     schedulerClient = client;
 
     // ── CLAIM BUTTON ──────────────────────────────────────────────────────────
     if (interaction.isButton() && interaction.customId.startsWith('ticket_claim_btn_')) {
       const channelId = interaction.customId.replace('ticket_claim_btn_', '');
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id=$1 AND status='open'`, [channelId]);
-      if (!rows[0]) return interaction.reply({ content: '⚠️ This ticket is no longer active.', flags: 64 });
+      if (!rows[0]) return interaction.reply({ content: t(lang, 'ticket_no_longer_active'), flags: 64 });
       const ticket = rows[0];
-      if (ticket.claimed_by) return interaction.reply({ content: `⚠️ This ticket is already claimed by <@${ticket.claimed_by}>.`, flags: 64 });
+      if (ticket.claimed_by) return interaction.reply({ content: t(lang, 'ticket_already_claimed', { user: ticket.claimed_by }), flags: 64 });
 
       await pool.query(`UPDATE tickets SET claimed_by=$1 WHERE id=$2`, [interaction.user.id, ticket.id]);
 
       const updatedCloseRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`ticket_close_btn_${channelId}`).setLabel('Close Ticket').setEmoji('🔒').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`ticket_claim_btn_${channelId}`).setLabel('Claimed ✓').setEmoji('🛡️').setStyle(ButtonStyle.Secondary).setDisabled(true),
+        new ButtonBuilder().setCustomId(`ticket_close_btn_${channelId}`).setLabel(t(lang, 'ticket_btn_close')).setEmoji('🔒').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`ticket_claim_btn_${channelId}`).setLabel(t(lang, 'ticket_btn_claimed')).setEmoji('🛡️').setStyle(ButtonStyle.Secondary).setDisabled(true),
       );
       try { await interaction.message.edit({ components: [updatedCloseRow] }); } catch {}
 
       return interaction.reply({
         embeds: [new EmbedBuilder().setColor(0x00cc66)
-          .setDescription(`🛡️ <@${interaction.user.id}> has claimed this ticket!\n\nOther staff can relax — this one's covered.`)]
+          .setDescription(`🛡️ ${t(lang, 'ticket_claimed_msg', { user: interaction.user.id })}`)]
       });
     }
 
@@ -455,17 +460,17 @@ module.exports = {
     if (interaction.isButton() && interaction.customId.startsWith('ticket_reopen_')) {
       const channelId = interaction.customId.replace('ticket_reopen_', '');
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id=$1 AND status='closed'`, [channelId]);
-      if (!rows[0]) return interaction.reply({ content: '⚠️ Cannot reopen.', flags: 64 });
+      if (!rows[0]) return interaction.reply({ content: t(lang, 'ticket_cannot_reopen'), flags: 64 });
       const ticket = rows[0];
       try { await interaction.channel.permissionOverwrites.edit(ticket.user_id, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true }); } catch {}
       await pool.query(`UPDATE tickets SET status='open', closed_at=NULL WHERE channel_id=$1`, [channelId]);
       const closeRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`ticket_close_btn_${channelId}`).setLabel('Close Ticket').setEmoji('🔒').setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId(`ticket_close_btn_${channelId}`).setLabel(t(lang, 'ticket_btn_close')).setEmoji('🔒').setStyle(ButtonStyle.Danger)
       );
       return interaction.update({
         embeds: [new EmbedBuilder().setColor(0x00cc66)
-          .setTitle('🔓 Ticket Reopened')
-          .setDescription(`Reopened by <@${interaction.user.id}>. <@${ticket.user_id}> can see this channel again.`)],
+          .setTitle(`🔓 ${t(lang, 'ticket_reopened_title')}`)
+          .setDescription(t(lang, 'ticket_reopened_desc', { staff: interaction.user.id, opener: ticket.user_id }))],
         components: [closeRow]
       });
     }
@@ -474,8 +479,8 @@ module.exports = {
     if (interaction.isButton() && interaction.customId.startsWith('ticket_delete_')) {
       const channelId = interaction.customId.replace('ticket_delete_', '');
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id=$1`, [channelId]);
-      if (!rows[0]) return interaction.reply({ content: '⚠️ Ticket not found.', flags: 64 });
-      await interaction.update({ embeds: [new EmbedBuilder().setColor(0xff4444).setDescription('🗑️ Saving transcript and deleting...')], components: [] });
+      if (!rows[0]) return interaction.reply({ content: t(lang, 'ticket_not_found'), flags: 64 });
+      await interaction.update({ embeds: [new EmbedBuilder().setColor(0xff4444).setDescription(`🗑️ ${t(lang, 'ticket_saving_del')}`)], components: [] });
       await saveTranscriptAndDelete(interaction.channel, guild, rows[0], interaction.user.id, client);
       return;
     }
@@ -484,24 +489,24 @@ module.exports = {
     if (interaction.isButton() && interaction.customId.startsWith('ticket_close_btn_')) {
       const channelId = interaction.customId.replace('ticket_close_btn_', '');
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE channel_id=$1 AND status='open'`, [channelId]);
-      if (!rows[0]) return interaction.reply({ content: '⚠️ Already closed.', flags: 64 });
+      if (!rows[0]) return interaction.reply({ content: t(lang, 'ticket_already_closed'), flags: 64 });
       const ticket = rows[0];
       try { await interaction.channel.permissionOverwrites.edit(ticket.user_id, { ViewChannel: false }); } catch {}
       await pool.query(`UPDATE tickets SET status='closed', closed_at=NOW(), closed_by=$1 WHERE channel_id=$2`, [interaction.user.id, channelId]);
       try { const { incrementStat } = require('./staffstats'); await incrementStat(interaction.user.id, guild.id, 'tickets_closed'); } catch {}
       const deleteTime = Math.floor(Date.now() / 1000) + 86400;
       const reopenRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`ticket_reopen_${channelId}`).setLabel('Reopen').setEmoji('🔓').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`ticket_delete_${channelId}`).setLabel('Delete Now').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`ticket_reopen_${channelId}`).setLabel(t(lang, 'ticket_btn_reopen')).setEmoji('🔓').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`ticket_delete_${channelId}`).setLabel(t(lang, 'ticket_btn_delete')).setEmoji('🗑️').setStyle(ButtonStyle.Danger),
       );
       return interaction.update({
-        embeds: [new EmbedBuilder().setTitle('🔒 Ticket Closed').setColor(0xff4444)
+        embeds: [new EmbedBuilder().setTitle(`🔒 ${t(lang, 'ticket_closed_title')}`).setColor(0xff4444)
           .setDescription(
-            `Closed by <@${interaction.user.id}>.\n` +
-            (ticket.claimed_by ? `🛡️ Was handled by <@${ticket.claimed_by}>\n` : '') +
-            `\nOpener can no longer see this channel.\n🗑️ Auto-deletes <t:${deleteTime}:R> unless reopened.`
+            `${t(lang, 'ticket_closed_by_desc', { user: interaction.user.id })}\n` +
+            (ticket.claimed_by ? `🛡️ ${t(lang, 'ticket_handled_by', { user: ticket.claimed_by })}\n` : '') +
+            `\n${t(lang, 'ticket_closed_info', { time: deleteTime })}`
           )
-          .setFooter({ text: 'Only staff can see this channel now' })],
+          .setFooter({ text: t(lang, 'ticket_closed_footer') })],
         components: [reopenRow]
       });
     }
@@ -513,26 +518,25 @@ module.exports = {
       const rating = parseInt(parts[3]);
 
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE id=$1`, [ticketId]);
-      if (!rows[0]) return interaction.reply({ content: '⚠️ Ticket not found.', flags: 64 });
+      if (!rows[0]) return interaction.reply({ content: t(lang, 'ticket_not_found'), flags: 64 });
       const ticket = rows[0];
 
-      if (ticket.rating) return interaction.reply({ content: '⚠️ You already rated this ticket.', flags: 64 });
-      if (interaction.user.id !== ticket.user_id) return interaction.reply({ content: '⚠️ Only the ticket opener can rate.', flags: 64 });
+      if (ticket.rating) return interaction.reply({ content: t(lang, 'ticket_already_rated'), flags: 64 });
+      if (interaction.user.id !== ticket.user_id) return interaction.reply({ content: t(lang, 'ticket_only_opener_rate'), flags: 64 });
 
       const { rows: bl } = await pool.query(`SELECT 1 FROM rating_blacklist WHERE user_id=$1 AND guild_id=$2`, [interaction.user.id, ticket.guild_id]);
-      if (bl.length > 0) return interaction.reply({ content: '⚠️ You are not allowed to give ratings.', flags: 64 });
+      if (bl.length > 0) return interaction.reply({ content: t(lang, 'ticket_rating_forbidden'), flags: 64 });
 
-      // Ratings below 3 stars require a short explanation via modal
       if (rating <= 2) {
         const modal = new ModalBuilder()
           .setCustomId(`ticket_rate_reason_${ticketId}_${rating}`)
-          .setTitle(`Why ${rating} star${rating !== 1 ? 's' : ''}?`);
+          .setTitle(t(lang, 'ticket_rate_modal_title', { rating }));
 
         const reasonInput = new TextInputBuilder()
           .setCustomId('reason')
-          .setLabel('What went wrong?')
+          .setLabel(t(lang, 'ticket_rate_modal_label'))
           .setStyle(TextInputStyle.Paragraph)
-          .setPlaceholder('Please explain briefly so we can improve...')
+          .setPlaceholder(t(lang, 'ticket_rate_modal_ph'))
           .setRequired(true)
           .setMaxLength(500);
 
@@ -540,7 +544,6 @@ module.exports = {
         return interaction.showModal(modal);
       }
 
-      // 3+ stars — no reason needed, save immediately
       await pool.query(`UPDATE tickets SET rating=$1, rated_by=$2, status='deleted' WHERE id=$3`, [rating, interaction.user.id, ticketId]);
 
       if (ticket.claimed_by) {
@@ -555,9 +558,9 @@ module.exports = {
       const stars = '⭐'.repeat(rating);
       await interaction.update({
         embeds: [new EmbedBuilder()
-          .setTitle('⭐ Thank you for your feedback!')
+          .setTitle(`⭐ ${t(lang, 'ticket_rate_thanks_title')}`)
           .setColor(0x2ecc71)
-          .setDescription(`You rated your support experience **${stars} (${rating}/5)**.\n\nYour feedback helps us improve our team!`)],
+          .setDescription(t(lang, 'ticket_rate_thanks_desc', { stars, rating }))],
         components: []
       });
       return;
@@ -570,15 +573,14 @@ module.exports = {
       const typeIndex = parts[1] !== undefined ? parseInt(parts[1]) : 0;
       const user = interaction.user;
       const config = await getConfig(guildId);
-      if (!config) return interaction.reply({ content: '⚠️ Ticket system not configured.', flags: 64 });
+      if (!config) return interaction.reply({ content: t(lang, 'ticket_not_setup'), flags: 64 });
 
-      const types = (config.ticket_types && config.ticket_types.length > 0) ? config.ticket_types : ['General Support'];
+      const types = (config.ticket_types && config.ticket_types.length > 0) ? config.ticket_types : [t(lang, 'ticket_gen_support')];
       const ticketType = types[typeIndex] || types[0];
 
       const { rows: existing } = await pool.query(`SELECT * FROM tickets WHERE guild_id=$1 AND user_id=$2 AND status='open'`, [guildId, user.id]);
-      if (existing.length > 0) return interaction.reply({ content: `⚠️ You already have an open ticket: <#${existing[0].channel_id}>`, flags: 64 });
+      if (existing.length > 0) return interaction.reply({ content: t(lang, 'ticket_already_open', { channel: existing[0].channel_id }), flags: 64 });
 
-      // Clean the type text for use in the channel name (strip emoji/symbols)
       const cleanType = ticketType.replace(/[^\w\s]/gi, '').trim().toLowerCase().replace(/\s+/g, '-').slice(0, 15) || 'ticket';
       const cleanUser = user.username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15);
 
@@ -598,32 +600,32 @@ module.exports = {
 
       let ticketChannel;
       try { ticketChannel = await guild.channels.create(channelOptions); }
-      catch (err) { return interaction.reply({ content: '❌ Failed to create ticket channel. Check my permissions.', flags: 64 }); }
+      catch (err) { return interaction.reply({ content: t(lang, 'ticket_create_failed'), flags: 64 }); }
 
       await pool.query(`INSERT INTO tickets (guild_id, channel_id, user_id, ticket_type) VALUES ($1,$2,$3,$4)`, [guildId, ticketChannel.id, user.id, ticketType]);
 
       const closeRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`ticket_close_btn_${ticketChannel.id}`).setLabel('Close Ticket').setEmoji('🔒').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`ticket_claim_btn_${ticketChannel.id}`).setLabel('Claim Ticket').setEmoji('🛡️').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`ticket_close_btn_${ticketChannel.id}`).setLabel(t(lang, 'ticket_btn_close')).setEmoji('🔒').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`ticket_claim_btn_${ticketChannel.id}`).setLabel(t(lang, 'ticket_btn_claim')).setEmoji('🛡️').setStyle(ButtonStyle.Primary),
       );
 
       await ticketChannel.send({
         content: `<@${user.id}>${config.staff_role_id ? ` <@&${config.staff_role_id}>` : ''}`,
         embeds: [new EmbedBuilder()
-          .setTitle('🎫 Support Ticket')
+          .setTitle(`🎫 ${t(lang, 'ticket_support_title')}`)
           .setColor(0x5865f2)
-          .setDescription(`Hey <@${user.id}>, welcome to your ticket!\n\nDescribe your issue and a staff member will assist you shortly.`)
+          .setDescription(t(lang, 'ticket_welcome', { user: user.id }))
           .addFields(
-            { name: '👤 Opened by', value: `<@${user.id}>`, inline: true },
-            { name: '📂 Category', value: ticketType, inline: true },
-            { name: '🛡️ Status', value: '🔴 Unclaimed', inline: true },
+            { name: `👤 ${t(lang, 'ticket_opened_by')}`, value: `<@${user.id}>`, inline: true },
+            { name: `📂 ${t(lang, 'ticket_category')}`, value: ticketType, inline: true },
+            { name: `🛡️ ${t(lang, 'ticket_status')}`, value: `🔴 ${t(lang, 'ticket_unclaimed')}`, inline: true },
           )
           .setThumbnail(user.displayAvatarURL({ extension: 'png', size: 256 }))
-          .setFooter({ text: 'A mod will claim this ticket shortly' })],
+          .setFooter({ text: t(lang, 'ticket_mod_claim') })],
         components: [closeRow]
       });
 
-      return interaction.reply({ content: `✅ Your ticket: <#${ticketChannel.id}>`, flags: 64 });
+      return interaction.reply({ content: t(lang, 'ticket_created_success', { channel: ticketChannel.id }), flags: 64 });
     }
 
     // ── RATING REASON MODAL SUBMIT ────────────────────────────────────────────
@@ -634,7 +636,7 @@ module.exports = {
       const reason = interaction.fields.getTextInputValue('reason');
 
       const { rows } = await pool.query(`SELECT * FROM tickets WHERE id=$1`, [ticketId]);
-      if (!rows[0]) return interaction.reply({ content: '⚠️ Ticket not found.', flags: 64 });
+      if (!rows[0]) return interaction.reply({ content: t(lang, 'ticket_not_found'), flags: 64 });
       const ticket = rows[0];
 
       await pool.query(`UPDATE tickets SET rating=$1, rating_reason=$2, rated_by=$3, status='deleted' WHERE id=$4`, [rating, reason, interaction.user.id, ticketId]);
@@ -651,9 +653,9 @@ module.exports = {
       const stars = '⭐'.repeat(rating);
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setTitle('⭐ Thank you for your feedback!')
+          .setTitle(`⭐ ${t(lang, 'ticket_rate_thanks_title')}`)
           .setColor(0xe74c3c)
-          .setDescription(`You rated your support experience **${stars} (${rating}/5)**.\n\nYour explanation has been recorded and will help our team improve.`)]
+          .setDescription(t(lang, 'ticket_rate_reason_logged', { stars, rating }))]
       });
     }
   }

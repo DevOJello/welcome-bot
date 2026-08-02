@@ -1,5 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const pool = require('../database');
+const { t } = require('../locales');
+const { getGuildLang } = require('../utils/getLang');
 
 async function initDB() {
   await pool.query(`
@@ -44,8 +46,9 @@ module.exports = {
     ),
 
   async execute(interaction, client) {
+    const lang = await getGuildLang(interaction.guildId);
     const guild = interaction.guild;
-    if (!guild) return interaction.reply({ content: '⚠️ This command can only be used inside a server.', flags: 64 });
+    if (!guild) return interaction.reply({ content: t(lang, 'guild_only_command'), flags: 64 });
 
     const sub = interaction.options.getSubcommand();
 
@@ -61,7 +64,7 @@ module.exports = {
       try {
         targetMessage = await channel.messages.fetch(messageId);
       } catch {
-        return interaction.reply({ content: '⚠️ Could not find that message. Make sure the message ID and channel are correct.', flags: 64 });
+        return interaction.reply({ content: t(lang, 'rr_message_not_found'), flags: 64 });
       }
 
       try {
@@ -72,21 +75,21 @@ module.exports = {
         `, [guild.id, channel.id, messageId, emoji, role.id]);
       } catch (err) {
         console.error('Failed to save reaction role:', err.message);
-        return interaction.reply({ content: '❌ Failed to save reaction role.', flags: 64 });
+        return interaction.reply({ content: t(lang, 'rr_save_error'), flags: 64 });
       }
 
       // Add the reaction to the message so members know what to click
       try {
         await targetMessage.react(emoji);
       } catch {
-        return interaction.reply({ content: `⚠️ Saved, but Oscar couldn't react with ${emoji} — make sure it's a valid emoji Oscar can use.`, flags: 64 });
+        return interaction.reply({ content: t(lang, 'rr_react_failed', { emoji }), flags: 64 });
       }
 
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setTitle('✅ Reaction Role Added')
+          .setTitle(`✅ ${t(lang, 'rr_add_title')}`)
           .setColor(0x00cc66)
-          .setDescription(`React with ${emoji} on [this message](${targetMessage.url}) to get <@&${role.id}>!`)]
+          .setDescription(t(lang, 'rr_add_desc', { emoji, url: targetMessage.url, roleId: role.id }))]
       });
     }
 
@@ -99,13 +102,13 @@ module.exports = {
         DELETE FROM reaction_roles WHERE guild_id = $1 AND message_id = $2 AND emoji = $3
       `, [guild.id, messageId, emoji]);
 
-      if (rowCount === 0) return interaction.reply({ content: '⚠️ No reaction role found for that message and emoji.', flags: 64 });
+      if (rowCount === 0) return interaction.reply({ content: t(lang, 'rr_not_found'), flags: 64 });
 
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setTitle('🗑️ Reaction Role Removed')
+          .setTitle(`🗑️ ${t(lang, 'rr_remove_title')}`)
           .setColor(0xff4444)
-          .setDescription(`The ${emoji} reaction role has been removed.`)]
+          .setDescription(t(lang, 'rr_remove_desc', { emoji }))]
       });
     }
 
@@ -113,15 +116,15 @@ module.exports = {
     if (sub === 'list') {
       const { rows } = await pool.query(`SELECT * FROM reaction_roles WHERE guild_id = $1`, [guild.id]);
 
-      if (rows.length === 0) return interaction.reply({ content: '📭 No reaction roles set up yet. Use `/reactionrole add` to get started.', flags: 64 });
+      if (rows.length === 0) return interaction.reply({ content: t(lang, 'rr_list_empty'), flags: 64 });
 
       const lines = rows.map(r =>
-        `${r.emoji} → <@&${r.role_id}> — [message](https://discord.com/channels/${guild.id}/${r.channel_id}/${r.message_id})`
+        `${r.emoji} → <@&${r.role_id}> — [${t(lang, 'rr_link_message')}](https://discord.com/channels/${guild.id}/${r.channel_id}/${r.message_id})`
       ).join('\n');
 
       return interaction.reply({
         embeds: [new EmbedBuilder()
-          .setTitle('🎭 Reaction Roles')
+          .setTitle(`🎭 ${t(lang, 'rr_list_title')}`)
           .setColor(0x5865f2)
           .setDescription(lines)]
       });

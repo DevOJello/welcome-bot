@@ -1,5 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
 const pool = require('../database');
+const { t } = require('../locales');
+const { getGuildLang } = require('../utils/getLang');
 
 async function initDB() {
   await pool.query(`
@@ -26,6 +28,8 @@ module.exports = {
     .addChannelOption(opt => opt.setName('log_channel').setDescription('Channel to log verifications (optional)').setRequired(false)),
 
   async execute(interaction) {
+    const lang = await getGuildLang(interaction.guildId);
+
     const roles = ['role1', 'role2', 'role3']
       .map(key => interaction.options.getRole(key))
       .filter(Boolean);
@@ -43,32 +47,26 @@ module.exports = {
     const roleList = roles.map(r => `🟢 ${r}`).join('\n');
 
     const embed = new EmbedBuilder()
-      .setTitle('🛡️ Server Verification')
-      .setDescription(
-        `Welcome to **${interaction.guild.name}**!\n\n` +
-        `To keep this community safe and bot-free, we ask every member to verify themselves.\n\n` +
-        `**How it works:**\n` +
-        `Click the **Verify Me!** button below to instantly unlock the server and start chatting.`
-      )
+      .setTitle(`🛡️ ${t(lang, 'verify_embed_title')}`)
+      .setDescription(t(lang, 'verify_embed_desc', { guild: interaction.guild.name }))
       .setColor(0x2B2D31)
       .setThumbnail(interaction.guild.iconURL({ dynamic: true, size: 512 }))
-      .addFields({ name: '🔓 Roles you\'ll receive', value: roleList })
-      .setImage('https://i.imgur.com/8bYqk3S.png') // subtle divider banner — safe to remove if unwanted
-      .setFooter({ text: 'Secure Verification System', iconURL: interaction.guild.iconURL({ dynamic: true }) })
+      .addFields({ name: `🔓 ${t(lang, 'verify_roles_header')}`, value: roleList })
+      .setFooter({ text: t(lang, 'verify_footer'), iconURL: interaction.guild.iconURL({ dynamic: true }) })
       .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('verify_button')
-        .setLabel('Verify Me!')
+        .setLabel(t(lang, 'verify_btn_label'))
         .setEmoji('🔐')
         .setStyle(ButtonStyle.Success)
     );
 
     await interaction.channel.send({ embeds: [embed], components: [row] });
-    await interaction.reply({
-      content: `✅ Verification message deployed with **${roles.length}** role${roles.length !== 1 ? 's' : ''} configured!`,
+    return interaction.reply({
+      content: t(lang, 'verify_setup_success', { count: roles.length }),
       flags: 64
     });
-  },
+  }
 };

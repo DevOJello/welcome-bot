@@ -1,4 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { getGuildLang } = require('../utils/getLang');
+const { t } = require('../locales');
 
 // In-memory AFK store: userId -> { reason, since, guildId }
 const afkUsers = new Map();
@@ -6,18 +8,28 @@ const afkUsers = new Map();
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('afk')
-    .setDescription('Set your AFK status')
+    .setDescription('Set your AFK status / Stel je AFK status in')
+    .setDescriptionLocalizations({
+      'nl': 'Stel je AFK-status in',
+      'en-US': 'Set your AFK status',
+      'en-GB': 'Set your AFK status'
+    })
     .addStringOption(opt =>
       opt.setName('reason')
-        .setDescription('Reason for being AFK (optional)')
+        .setDescription('Reason for being AFK / Reden voor AFK')
         .setRequired(false)
     ),
 
   async execute(interaction) {
-    const reason = interaction.options.getString('reason') || 'AFK';
+    // 1. Haal de taal op van de server
+    const lang = await getGuildLang(interaction.guildId);
+
+    const rawReason = interaction.options.getString('reason');
+    // Gebruik de opgegeven reden of de standaard 'AFK' vertaling
+    const reason = rawReason || t(lang, 'afk_default_reason');
     const member = interaction.member;
 
-    // Save AFK state (no need to hardcode originalNick anymore)
+    // Save AFK state
     afkUsers.set(interaction.user.id, {
       reason,
       since: Date.now(),
@@ -37,10 +49,13 @@ module.exports = {
       }
     }
 
+    // 2. Reply met de vertaalde embed tekst
     return interaction.reply({
-      embeds: [new EmbedBuilder()
-        .setColor(0xffa500)
-        .setDescription(`💤 **${member.user.username}** is now AFK: *${reason}*`)]
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xffa500)
+          .setDescription(t(lang, 'afk_set_success', { user: member.user.username, reason }))
+      ]
     });
   },
 

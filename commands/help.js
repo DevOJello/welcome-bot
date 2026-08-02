@@ -1,4 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { getGuildLang } = require('../utils/getLang');
+const { t } = require('../locales');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -6,14 +8,16 @@ module.exports = {
     .setDescription('Displays a full overview of all Oscar Bot commands.'),
 
   async execute(interaction) {
+    const lang = await getGuildLang(interaction.guildId);
+
     const embed = new EmbedBuilder()
-      .setTitle('🐾 Oscar Bot — Full Command Reference')
+      .setTitle(t(lang, 'help_title'))
       .setColor(0x5865F2)
-      .setDescription('Here is a complete list of all available commands organized by category:')
+      .setDescription(t(lang, 'help_desc'))
       .addFields(
         {
-          name: '⚠️ Moderation & Member Management',
-          value: 
+          name: t(lang, 'help_cat_mod'),
+          value:
             '`/ban` — Permanently bans a user from the server.\n' +
             '`/unban` — Unbans a user using their User ID.\n' +
             '`/tempban` — Temporarily bans a user for a set duration.\n' +
@@ -26,50 +30,42 @@ module.exports = {
             '`/role add` | `/role remove` — Manually assign or strip roles.'
         },
         {
-          name: '🎫 Ticket System',
+          name: t(lang, 'help_cat_tickets'),
           value:
             '`/ticket setup` — Configures the ticket system & staff roles.\n' +
-            '`/ticket panel` — Sends an interactive "Open a Ticket" button panel.\n' +
-            '`/ticket claim` | `/unclaim` — Claim or release active tickets.\n' +
-            '`/ticket close` — Closes a ticket and triggers rating prompts.\n' +
-            '`/ticket add` | `/remove` — Manage user access in tickets.\n' +
-            '`/ticket ratings` | `/ratingban` | `/ratingunban` — Manage staff ratings.'
-        },
-        {
-          name: '📊 Staff Activity & Tasks',
-          value:
             '`/staffstats` — Shows staff activity metrics (tickets, warns, bans, etc.).\n' +
             '`/task` — Staff tool to assign and organize internal duties.'
         },
         {
-          name: '🛡️ Verification & Welcome',
+          name: t(lang, 'help_cat_verify'),
           value:
             '`/setup-verify` — Posts an interactive verification panel.\n' +
             '`/welcome` — Configures custom welcome messages and channel settings.'
         },
         {
-          name: '🛠️ Utility & Server Tools',
+          name: t(lang, 'help_cat_tools'),
           value:
             '`/poll` — Creates a quick poll for members to vote on.\n' +
             '`/roleinfo` — Displays detailed info and permissions for a role.\n' +
             '`/ping` — Checks the bot\'s current API latency and status.\n' +
-            '`/afk` — Sets AFK status and auto-replies when mentioned.'
+            '`/afk` — Sets AFK status and auto-replies when mentioned.\n' +
+            '`/language` — Change server language.\n' +
+            '`/logtoggle` — Enable or disable specific log categories.'
         },
         {
-          name: '🚀 Boosts, Reaction Roles & Giveaways',
+          name: t(lang, 'help_cat_boosts'),
           value:
             '`/reactionrole add` | `remove` | `list` — Emoji-based self-roles.\n' +
             '`/boost setup` | `/boost config` — Configure booster rewards.\n' +
             '`/giveaway start` | `end` | `reroll` | `bonus` | `bonuslist` — Run giveaways.'
         },
         {
-          name: '🎮 Games',
+          name: t(lang, 'help_cat_games'),
           value:
             '`/hangrygames new` | `role` | `cancel` — Start or cancel a Battle Royale simulation.'
         }
       )
-      .setFooter({ text: 'Oscar Bot by DevOJello · built with discord.js v14' })
-      .setTimestamp();
+      .setFooter({ text: 'Oscar Bot by DevOJello · built with discord.js v14' });
 
     return interaction.reply({ embeds: [embed] });
   }
