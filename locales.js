@@ -1004,3 +1004,20 @@ const translations = {
     hg_winner_congrats: '🎉 SALUEZ TOUS LE CHAMPION : <@{winner}> ! 🎉'
   }
 };
+
+/**
+ * Fetches the translated text for a given key and language.
+ * Falls back to English ('en') if the language or key is missing.
+ */
+function t(lang, key, placeholders = {}) {
+  const language = translations[lang] ? lang : 'en';
+  let text = translations[language]?.[key] || translations['en']?.[key] || key;
+
+  for (const [placeholder, value] of Object.entries(placeholders)) {
+    text = text.replace(new RegExp(`\\{${placeholder}\\}`, 'g'), value);
+  }
+
+  return text;
+}
+
+module.exports = { t, translations };
