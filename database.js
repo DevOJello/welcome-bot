@@ -1,15 +1,25 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  console.error('❌ CRITICAL: DATABASE_URL is not defined in environment variables!');
+}
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  connectionString: connectionString,
+  ssl: {
+    rejectUnauthorized: false
+  },
+  // Extra opties om timeouts en netwerkfouten op Render/Supabase te voorkomen
+  connectionTimeoutMillis: 10000,
+  idleTimeoutMillis: 30000
 });
 
 // ── Database Initialisatie ────────────────────────────────────────────────────
 async function initDB() {
   try {
-    // 1. Maak de guild_settings tabel aan voor taal- en loginstellingen
     await pool.query(`
       CREATE TABLE IF NOT EXISTS guild_settings (
         guild_id TEXT PRIMARY KEY,
@@ -23,7 +33,7 @@ async function initDB() {
       )
     `);
 
-    // 2. Kolommen toevoegen als de tabel al bestond (veiligheidshalve)
+    // Kolommen toevoegen voor de zekerheid
     await pool.query(`ALTER TABLE guild_settings ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'en'`);
     await pool.query(`ALTER TABLE guild_settings ADD COLUMN IF NOT EXISTS log_channel_id TEXT`);
     await pool.query(`ALTER TABLE guild_settings ADD COLUMN IF NOT EXISTS log_messages BOOLEAN DEFAULT TRUE`);
@@ -32,13 +42,12 @@ async function initDB() {
     await pool.query(`ALTER TABLE guild_settings ADD COLUMN IF NOT EXISTS log_voice BOOLEAN DEFAULT TRUE`);
     await pool.query(`ALTER TABLE guild_settings ADD COLUMN IF NOT EXISTS log_roles BOOLEAN DEFAULT TRUE`);
 
-    console.log('✅ Database tabellen succesvol geïnitialiseerd.');
+    console.log('✅ Database tabellen succesvol geïnitialiseerd via externe database.');
   } catch (err) {
     console.error('❌ Fout bij het initialiseren van de database:', err.message);
   }
 }
 
-// Draai de initialisatie zodra de database geladen wordt
 initDB();
 
 module.exports = pool;
