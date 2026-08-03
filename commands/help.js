@@ -49,8 +49,9 @@ module.exports = {
             '`/roleinfo` — Displays detailed info and permissions for a role.\n' +
             '`/ping` — Checks the bot\'s current API latency and status.\n' +
             '`/afk` — Sets AFK status and auto-replies when mentioned.\n' +
-            '`/language` — Change server language.\n' +
-            '`/logtoggle` — Enable or disable specific log categories.'
+            '`/language` — Change bot language for the server.\n' +
+            '`/logtoggle` — Enable or disable specific log categories.\n' +
+            '`/setlog` — Configure the channel where server logs are sent.'
         },
         {
           name: t(lang, 'help_cat_boosts'),
