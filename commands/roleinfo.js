@@ -6,9 +6,19 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('roleinfo')
     .setDescription('Displays detailed information about a specific role')
+    .setDescriptionLocalizations({
+      'nl': 'Toont gedetailleerde informatie over een specifieke rol',
+      'fr': 'Affiche des informations détaillées sur un rôle spécifique',
+      'hi': 'किसी विशिष्ट भूमिका के बारे में विस्तृत जानकारी प्रदर्शित करता है'
+    })
     .addRoleOption(option =>
       option.setName('role')
         .setDescription('The role you want to inspect')
+        .setDescriptionLocalizations({
+          'nl': 'De rol die je wilt bekijken',
+          'fr': 'Le rôle que vous souhaitez inspecter',
+          'hi': 'वह भूमिका जिसे आप देखना चाहते हैं'
+        })
         .setRequired(true)
     ),
 

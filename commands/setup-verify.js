@@ -20,12 +20,17 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('setup-verify')
     .setDescription('Sets up the advanced verification message in this channel.')
+    .setDescriptionLocalizations({
+      'nl': 'Stelt het geavanceerde verificatiebericht in dit kanaal in.',
+      'fr': 'Configure le message de vérification avancé dans ce canal.',
+      'hi': 'इस चैनल में उन्नत सत्यापन संदेश सेट अप करता है।'
+    })
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addRoleOption(opt => opt.setName('role1').setDescription('Role to give on verification').setRequired(true))
-    .addRoleOption(opt => opt.setName('role2').setDescription('Additional role to give (optional)').setRequired(false))
-    .addRoleOption(opt => opt.setName('role3').setDescription('Additional role to give (optional)').setRequired(false))
-    .addRoleOption(opt => opt.setName('unverified_role').setDescription('Role to remove once verified (optional)').setRequired(false))
-    .addChannelOption(opt => opt.setName('log_channel').setDescription('Channel to log verifications (optional)').setRequired(false)),
+    .addRoleOption(opt => opt.setName('role1').setDescription('Role to give on verification').setDescriptionLocalizations({ 'nl': 'Rol om te geven bij verificatie', 'fr': 'Rôle à attribuer lors de la vérification', 'hi': 'सत्यापन पर देने के लिए भूमिका' }).setRequired(true))
+    .addRoleOption(opt => opt.setName('role2').setDescription('Additional role to give (optional)').setDescriptionLocalizations({ 'nl': 'Extra rol om te geven (optioneel)', 'fr': 'Rôle supplémentaire à attribuer (facultatif)', 'hi': 'देने के लिए अतिरिक्त भूमिका (वैकल्पिक)' }).setRequired(false))
+    .addRoleOption(opt => opt.setName('role3').setDescription('Additional role to give (optional)').setDescriptionLocalizations({ 'nl': 'Extra rol om te geven (optioneel)', 'fr': 'Rôle supplémentaire à attribuer (facultatif)', 'hi': 'देने के लिए अतिरिक्त भूमिका (वैकल्पिक)' }).setRequired(false))
+    .addRoleOption(opt => opt.setName('unverified_role').setDescription('Role to remove once verified (optional)').setDescriptionLocalizations({ 'nl': 'Rol om te verwijderen na verificatie (optioneel)', 'fr': 'Rôle à retirer une fois vérifié (facultatif)', 'hi': 'सत्यापित होने पर हटाने के लिए भूमिका (वैकल्पिक)' }).setRequired(false))
+    .addChannelOption(opt => opt.setName('log_channel').setDescription('Channel to log verifications (optional)').setDescriptionLocalizations({ 'nl': 'Kanaal om verificaties in te loggen (optioneel)', 'fr': 'Canal pour journaliser les vérifications (facultatif)', 'hi': 'सत्यापन लॉग करने के लिए चैनल (वैकल्पिक)' }).setRequired(false)),
 
   async execute(interaction) {
     const lang = await getGuildLang(interaction.guildId);

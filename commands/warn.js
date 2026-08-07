@@ -21,22 +21,42 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('warn')
     .setDescription('Warning system')
+    .setDescriptionLocalizations({
+      'nl': 'Waarschuwingssysteem',
+      'fr': 'Système d\'avertissement',
+      'hi': 'चेतावनी प्रणाली'
+    })
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addSubcommand(sub =>
       sub.setName('add')
         .setDescription('Give a warning to a member')
-        .addUserOption(opt => opt.setName('user').setDescription('Member to warn').setRequired(true))
-        .addStringOption(opt => opt.setName('reason').setDescription('Reason for the warning').setRequired(true))
+        .setDescriptionLocalizations({
+          'nl': 'Geef een waarschuwing aan een lid',
+          'fr': 'Donner un avertissement à un membre',
+          'hi': 'एक सदस्य को चेतावनी दें'
+        })
+        .addUserOption(opt => opt.setName('user').setDescription('Member to warn').setDescriptionLocalizations({ 'nl': 'Te waarschuwen lid', 'fr': 'Membre à avertir', 'hi': 'चेतावनी देने के लिए सदस्य' }).setRequired(true))
+        .addStringOption(opt => opt.setName('reason').setDescription('Reason for the warning').setDescriptionLocalizations({ 'nl': 'Reden voor de waarschuwing', 'fr': 'Raison de l\'avertissement', 'hi': 'चेतावनी का कारण' }).setRequired(true))
     )
     .addSubcommand(sub =>
       sub.setName('remove')
         .setDescription('Remove a warning by ID')
-        .addIntegerOption(opt => opt.setName('id').setDescription('Warning ID to remove').setRequired(true))
+        .setDescriptionLocalizations({
+          'nl': 'Verwijder een waarschuwing op ID',
+          'fr': 'Supprimer un avertissement par ID',
+          'hi': 'आईडी द्वारा चेतावनी हटाएं'
+        })
+        .addIntegerOption(opt => opt.setName('id').setDescription('Warning ID to remove').setDescriptionLocalizations({ 'nl': 'Te verwijderen waarschuwings-ID', 'fr': 'ID de l\'avertissement à supprimer', 'hi': 'हटाने के लिए चेतावनी आईडी' }).setRequired(true))
     )
     .addSubcommand(sub =>
       sub.setName('list')
         .setDescription('View all warnings for a user')
-        .addUserOption(opt => opt.setName('user').setDescription('Member to check').setRequired(true))
+        .setDescriptionLocalizations({
+          'nl': 'Bekijk alle waarschuwingen voor een gebruiker',
+          'fr': 'Afficher tous les avertissements d\'un utilisateur',
+          'hi': 'उपयोगकर्ता के लिए सभी चेतावनियाँ देखें'
+        })
+        .addUserOption(opt => opt.setName('user').setDescription('Member to check').setDescriptionLocalizations({ 'nl': 'Te controleren lid', 'fr': 'Membre à vérifier', 'hi': 'जाँच करने के लिए सदस्य' }).setRequired(true))
     ),
 
   async execute(interaction, client) {

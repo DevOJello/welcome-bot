@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const pool = require('../database');
 const { t } = require('../locales');
 const { getGuildLang } = require('../utils/getLang');
@@ -22,27 +22,47 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('reactionrole')
     .setDescription('Manage reaction roles')
+    .setDescriptionLocalizations({
+      'nl': 'Beheer reactierollen',
+      'fr': 'Gérer les rôles par réaction',
+      'hi': 'प्रतिक्रिया भूमिकाएँ प्रबंधित करें'
+    })
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
 
     .addSubcommand(sub =>
       sub.setName('add')
         .setDescription('Link an emoji reaction on a message to a role')
-        .addStringOption(opt => opt.setName('message_id').setDescription('ID of the message to add the reaction to').setRequired(true))
-        .addStringOption(opt => opt.setName('emoji').setDescription('Emoji to react with (e.g. 🎮 or a custom emoji)').setRequired(true))
-        .addRoleOption(opt => opt.setName('role').setDescription('Role to give when someone reacts').setRequired(true))
-        .addChannelOption(opt => opt.setName('channel').setDescription('Channel the message is in (leave empty for current channel)').setRequired(false))
+        .setDescriptionLocalizations({
+          'nl': 'Koppel een emojireactie op een bericht aan een rol',
+          'fr': 'Lier une réaction emoji sur un message à un rôle',
+          'hi': 'किसी संदेश पर इमोजी प्रतिक्रिया को किसी भूमिका से लिंक करें'
+        })
+        .addStringOption(opt => opt.setName('message_id').setDescription('ID of the message to add the reaction to').setDescriptionLocalizations({ 'nl': 'ID van het bericht om de reactie aan toe te voegen', 'fr': 'ID du message auquel ajouter la réaction', 'hi': 'प्रतिक्रिया जोड़ने के लिए संदेश की आईडी' }).setRequired(true))
+        .addStringOption(opt => opt.setName('emoji').setDescription('Emoji to react with (e.g. 🎮 or a custom emoji)').setDescriptionLocalizations({ 'nl': 'Emoji om op te reageren (bijv. 🎮 of een aangepaste emoji)', 'fr': 'Emoji avec lequel réagir (ex. 🎮 ou emoji personnalisé)', 'hi': 'प्रतिक्रिया देने के लिए इमोजी (उदा. 🎮 या कस्टम इमोजी)' }).setRequired(true))
+        .addRoleOption(opt => opt.setName('role').setDescription('Role to give when someone reacts').setDescriptionLocalizations({ 'nl': 'Rol om te geven wanneer iemand reageert', 'fr': 'Rôle à attribuer lorsqu\' quelqu\'un réagit', 'hi': 'जब कोई प्रतिक्रिया दे तो देने के लिए भूमिका' }).setRequired(true))
+        .addChannelOption(opt => opt.setName('channel').setDescription('Channel the message is in (leave empty for current channel)').setDescriptionLocalizations({ 'nl': 'Kanaal waarin het bericht staat (leeg laten voor huidige kanaal)', 'fr': 'Canal où se trouve le message (laisser vide pour le canal actuel)', 'hi': 'वह चैनल जिसमें संदेश है (वर्तमान चैनल के लिए खाली छोड़ें)' }).setRequired(false))
     )
 
     .addSubcommand(sub =>
       sub.setName('remove')
         .setDescription('Remove a reaction role link')
-        .addStringOption(opt => opt.setName('message_id').setDescription('Message ID').setRequired(true))
-        .addStringOption(opt => opt.setName('emoji').setDescription('Emoji to remove').setRequired(true))
+        .setDescriptionLocalizations({
+          'nl': 'Verwijder een reactierolkoppeling',
+          'fr': 'Supprimer un lien de rôle par réaction',
+          'hi': 'एक प्रतिक्रिया भूमिका लिंक हटाएं'
+        })
+        .addStringOption(opt => opt.setName('message_id').setDescription('Message ID').setDescriptionLocalizations({ 'nl': 'Bericht-ID', 'fr': 'ID du message', 'hi': 'संदेश आईडी' }).setRequired(true))
+        .addStringOption(opt => opt.setName('emoji').setDescription('Emoji to remove').setDescriptionLocalizations({ 'nl': 'Emoji om te verwijderen', 'fr': 'Emoji à supprimer', 'hi': 'हटाने के लिए इमोजी' }).setRequired(true))
     )
 
     .addSubcommand(sub =>
       sub.setName('list')
         .setDescription('View all reaction roles in this server')
+        .setDescriptionLocalizations({
+          'nl': 'Bekijk alle reactierollen op deze server',
+          'fr': 'Afficher tous les rôles par réaction sur ce serveur',
+          'hi': 'इस सर्वर में सभी प्रतिक्रिया भूमिकाएँ देखें'
+        })
     ),
 
   async execute(interaction, client) {

@@ -135,34 +135,64 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('giveaway')
     .setDescription('Giveaway system')
+    .setDescriptionLocalizations({
+      'nl': 'Giveaway-systeem',
+      'fr': 'Système de concours',
+      'hi': 'giveaway प्रणाली'
+    })
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addSubcommand(sub =>
       sub.setName('start')
         .setDescription('Start a giveaway')
-        .addStringOption(opt => opt.setName('prize').setDescription('What are you giving away?').setRequired(true))
-        .addStringOption(opt => opt.setName('duration').setDescription('Duration e.g. 10m, 2h, 1d').setRequired(true))
-        .addIntegerOption(opt => opt.setName('winners').setDescription('Number of winners (default 1)').setRequired(false).setMinValue(1).setMaxValue(20))
-        .addChannelOption(opt => opt.setName('channel').setDescription('Channel to post in (default: current)').setRequired(false))
+        .setDescriptionLocalizations({
+          'nl': 'Start een giveaway',
+          'fr': 'Démarrer un concours',
+          'hi': 'giveaway शुरू करें'
+        })
+        .addStringOption(opt => opt.setName('prize').setDescription('What are you giving away?').setDescriptionLocalizations({ 'nl': 'Wat geef je weg?', 'fr': 'Que donnez-vous en prix ?', 'hi': 'आप क्या दे रहे हैं?' }).setRequired(true))
+        .addStringOption(opt => opt.setName('duration').setDescription('Duration e.g. 10m, 2h, 1d').setDescriptionLocalizations({ 'nl': 'Duur bijv. 10m, 2h, 1d', 'fr': 'Durée ex. 10m, 2h, 1d', 'hi': 'अवधि जैसे 10m, 2h, 1d' }).setRequired(true))
+        .addIntegerOption(opt => opt.setName('winners').setDescription('Number of winners (default 1)').setDescriptionLocalizations({ 'nl': 'Aantal winnaars (standaard 1)', 'fr': 'Nombre de gagnants (par défaut 1)', 'hi': 'विजेताओं की संख्या (डिफ़ॉल्ट 1)' }).setRequired(false).setMinValue(1).setMaxValue(20))
+        .addChannelOption(opt => opt.setName('channel').setDescription('Channel to post in (default: current)').setDescriptionLocalizations({ 'nl': 'Kanaal om in te plaatsen (standaard: huidig)', 'fr': 'Canal où publier (par défaut : actuel)', 'hi': 'पोस्ट करने के लिए चैनल (डिफ़ॉल्ट: वर्तमान)' }).setRequired(false))
     )
     .addSubcommand(sub =>
       sub.setName('end')
         .setDescription('End a giveaway early')
-        .addStringOption(opt => opt.setName('message_id').setDescription('Message ID of the giveaway').setRequired(true))
+        .setDescriptionLocalizations({
+          'nl': 'Beëindig een giveaway vroegtijdig',
+          'fr': 'Terminer un concours plus tôt',
+          'hi': 'giveaway जल्दी समाप्त करें'
+        })
+        .addStringOption(opt => opt.setName('message_id').setDescription('Message ID of the giveaway').setDescriptionLocalizations({ 'nl': 'Bericht-ID van de giveaway', 'fr': 'ID du message du concours', 'hi': 'giveaway की संदेश आईडी' }).setRequired(true))
     )
     .addSubcommand(sub =>
       sub.setName('reroll')
         .setDescription('Reroll the winners of an ended giveaway')
-        .addStringOption(opt => opt.setName('message_id').setDescription('Message ID of the giveaway').setRequired(true))
+        .setDescriptionLocalizations({
+          'nl': 'Kies nieuwe winnaars voor een beëindigde giveaway',
+          'fr': 'Tirer de nouveaux gagnants pour un concours terminé',
+          'hi': 'समाप्त हुए giveaway के विजेताओं को दोबारा चुनें'
+        })
+        .addStringOption(opt => opt.setName('message_id').setDescription('Message ID of the giveaway').setDescriptionLocalizations({ 'nl': 'Bericht-ID van de giveaway', 'fr': 'ID du message du concours', 'hi': 'giveaway की संदेश आईडी' }).setRequired(true))
     )
     .addSubcommand(sub =>
       sub.setName('bonus')
         .setDescription('Set bonus entries for a role')
-        .addRoleOption(opt => opt.setName('role').setDescription('Role to give bonus entries').setRequired(true))
-        .addIntegerOption(opt => opt.setName('entries').setDescription('Number of extra entries (0 to remove)').setRequired(true).setMinValue(0).setMaxValue(10))
+        .setDescriptionLocalizations({
+          'nl': 'Stel bonusdeelnames in voor een rol',
+          'fr': 'Définir des entrées bonus pour un rôle',
+          'hi': 'किसी भूमिका के लिए बोनस प्रविष्टियाँ सेट करें'
+        })
+        .addRoleOption(opt => opt.setName('role').setDescription('Role to give bonus entries').setDescriptionLocalizations({ 'nl': 'Rol om bonusdeelnames aan te geven', 'fr': 'Rôle pour donner des entrées bonus', 'hi': 'बोनस प्रविष्टियाँ देने के लिए भूमिका' }).setRequired(true))
+        .addIntegerOption(opt => opt.setName('entries').setDescription('Number of extra entries (0 to remove)').setDescriptionLocalizations({ 'nl': 'Aantal extra deelnames (0 om te verwijderen)', 'fr': 'Nombre d\'entrées supplémentaires (0 pour supprimer)', 'hi': 'अतिरिक्त प्रविष्टियों की संख्या (हटाने के लिए 0)' }).setRequired(true).setMinValue(0).setMaxValue(10))
     )
     .addSubcommand(sub =>
       sub.setName('bonuslist')
         .setDescription('View all bonus entry roles')
+        .setDescriptionLocalizations({
+          'nl': 'Bekijk alle rollen met bonusdeelnames',
+          'fr': 'Afficher tous les rôles avec des entrées bonus',
+          'hi': 'सभी बोनस प्रविष्टि भूमिकाएँ देखें'
+        })
     ),
 
   async execute(interaction, client) {

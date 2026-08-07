@@ -5,7 +5,12 @@ const { getGuildLang } = require('../utils/getLang');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('ping')
-    .setDescription('Check the bot latency and API response time'),
+    .setDescription('Check the bot latency and API response time')
+    .setDescriptionLocalizations({
+      'nl': 'Controleer de botlatentie en API-responstijd',
+      'fr': 'Vérifier la latence du bot et le temps de réponse de l\'API',
+      'hi': 'बॉस की लेटेंसी और API प्रतिक्रिया समय की जाँच करें'
+    }),
 
   async execute(interaction) {
     const lang = await getGuildLang(interaction.guildId);

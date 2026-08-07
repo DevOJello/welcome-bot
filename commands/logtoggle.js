@@ -7,11 +7,21 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('logtoggle')
     .setDescription('Enable or disable specific log categories')
+    .setDescriptionLocalizations({
+      'nl': 'Schakel specifieke logcategorieën in of uit',
+      'fr': 'Activer ou désactiver des catégories de journaux spécifiques',
+      'hi': 'विशिष्ट लॉग श्रेणियों को सक्षम या अक्षम करें'
+    })
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(option =>
       option
         .setName('category')
         .setDescription('The log category to toggle')
+        .setDescriptionLocalizations({
+          'nl': 'De in- of uitschakelen logcategorie',
+          'fr': 'La catégorie de journaux à basculer',
+          'hi': 'टogle करने के लिए लॉग श्रेणी'
+        })
         .setRequired(true)
         .addChoices(
           { name: '💬 Messages (Delete / Edit)', value: 'log_messages' },
@@ -25,6 +35,11 @@ module.exports = {
       option
         .setName('enabled')
         .setDescription('True to enable, False to disable')
+        .setDescriptionLocalizations({
+          'nl': 'True om in te schakelen, False om uit te schakelen',
+          'fr': 'True pour activer, False pour désactiver',
+          'hi': 'सक्षम करने के लिए True, अक्षम करने के लिए False'
+        })
         .setRequired(true)
     ),
 
@@ -49,6 +64,6 @@ module.exports = {
       .setDescription(t(lang, 'log_toggle_success', { category, statusText }))
       .setTimestamp();
 
-    return interaction.reply({ embeds: [embed], ephemeral: true });
+    return interaction.reply({ embeds: [embed], flags: 64 });
   }
 };

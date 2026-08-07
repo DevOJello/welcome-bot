@@ -51,8 +51,20 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('staffstats')
     .setDescription('View the moderation activity of a staff member.')
+    .setDescriptionLocalizations({
+      'nl': 'Bekijk de moderatie-activiteit van een stafmedewerker.',
+      'fr': 'Afficher l\'activité de modération d\'un membre du personnel.',
+      'hi': 'स्टाफ सदस्य की मॉडरेशन गतिविधि देखें।'
+    })
     .addUserOption(option =>
-      option.setName('target').setDescription('The staff member to check').setRequired(true)
+      option.setName('target')
+        .setDescription('The staff member to check')
+        .setDescriptionLocalizations({
+          'nl': 'Het te controleren staflid',
+          'fr': 'Le membre du personnel à vérifier',
+          'hi': 'जाँच करने के लिए स्टाफ सदस्य'
+        })
+        .setRequired(true)
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 

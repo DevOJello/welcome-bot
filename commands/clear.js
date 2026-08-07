@@ -6,10 +6,20 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('clear')
     .setDescription('Delete a number of messages from a channel')
+    .setDescriptionLocalizations({
+      'nl': 'Verwijder een aantal berichten uit een kanaal',
+      'fr': 'Supprimer un nombre de messages d\'un canal',
+      'hi': 'एक चैनल से कई संदेश हटाएं'
+    })
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addIntegerOption(opt =>
       opt.setName('amount')
         .setDescription('Number of messages to delete (1-100)')
+        .setDescriptionLocalizations({
+          'nl': 'Aantal te verwijderen berichten (1-100)',
+          'fr': 'Nombre de messages à supprimer (1-100)',
+          'hi': 'हटाए जाने वाले संदेशों की संख्या (1-100)'
+        })
         .setRequired(true)
         .setMinValue(1)
         .setMaxValue(100)
@@ -17,6 +27,11 @@ module.exports = {
     .addChannelOption(opt =>
       opt.setName('channel')
         .setDescription('Channel to clear (leave empty for current channel)')
+        .setDescriptionLocalizations({
+          'nl': 'Kanaal om te wissen (laat leeg voor huidige kanaal)',
+          'fr': 'Canal à effacer (laisser vide pour le canal actuel)',
+          'hi': 'साफ़ करने के लिए चैनल (वर्तमान चैनल के लिए खाली छोड़ दें)'
+        })
         .setRequired(false)
     ),
 

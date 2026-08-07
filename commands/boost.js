@@ -19,17 +19,32 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('boost')
     .setDescription('Configure the boost thank you system')
+    .setDescriptionLocalizations({
+      'nl': 'Configureer het boost-bedanksysteem',
+      'fr': 'Configurer le système de remerciement des boosts',
+      'hi': 'बूस्ट धन्यवाद प्रणाली को कॉन्फ़िगर करें'
+    })
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addSubcommand(sub =>
       sub.setName('setup')
         .setDescription('Set up the boost thank you system')
-        .addChannelOption(opt => opt.setName('channel').setDescription('Channel to send boost messages in').setRequired(true))
-        .addRoleOption(opt => opt.setName('role').setDescription('Role to give to boosters automatically').setRequired(true))
-        .addStringOption(opt => opt.setName('message').setDescription('Thank you message (use {user} for mention)').setRequired(false))
+        .setDescriptionLocalizations({
+          'nl': 'Stel het boost-bedanksysteem in',
+          'fr': 'Configurer le système de remerciement des boosts',
+          'hi': 'बूस्ट धन्यवाद प्रणाली सेट अप करें'
+        })
+        .addChannelOption(opt => opt.setName('channel').setDescription('Channel to send boost messages in').setDescriptionLocalizations({ 'nl': 'Kanaal om boost-berichten in te sturen', 'fr': 'Canal pour envoyer les messages de boost', 'hi': 'बूस्ट संदेश भेजने के लिए चैनल' }).setRequired(true))
+        .addRoleOption(opt => opt.setName('role').setDescription('Role to give to boosters automatically').setDescriptionLocalizations({ 'nl': 'Rol om automatisch aan boosters te geven', 'fr': 'Rôle à donner automatiquement aux boosters', 'hi': 'बूस्टर को स्वचालित रूप से देने के लिए भूमिका' }).setRequired(true))
+        .addStringOption(opt => opt.setName('message').setDescription('Thank you message (use {user} for mention)').setDescriptionLocalizations({ 'nl': 'Bedankbericht (gebruik {user} voor vermelding)', 'fr': 'Message de remerciement (utilisez {user})', 'hi': 'धन्यवाद संदेश (मेंशन के लिए {user} का उपयोग करें)' }).setRequired(false))
     )
     .addSubcommand(sub =>
       sub.setName('config')
         .setDescription('View current boost configuration')
+        .setDescriptionLocalizations({
+          'nl': 'Bekijk de huidige boost-configuratie',
+          'fr': 'Afficher la configuration actuelle des boosts',
+          'hi': 'वर्तमान बूस्ट कॉन्फ़िगरेशन देखें'
+        })
     ),
 
   async execute(interaction) {

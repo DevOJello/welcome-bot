@@ -189,57 +189,102 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('ticket')
     .setDescription('Ticket system management')
+    .setDescriptionLocalizations({
+      'nl': 'Beheer het ticketsysteem',
+      'fr': 'Gestion du système de tickets',
+      'hi': 'टिकट सिस्टम प्रबंधन'
+    })
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
 
     .addSubcommand(sub =>
       sub.setName('setup')
         .setDescription('Set up the ticket system')
-        .addRoleOption(opt => opt.setName('staff_role').setDescription('Role that can see and manage tickets').setRequired(true))
-        .addChannelOption(opt => opt.setName('transcript_channel').setDescription('Channel to save ticket transcripts').setRequired(true))
-        .addChannelOption(opt => opt.setName('category').setDescription('Discord category to create ticket channels in').setRequired(false))
+        .setDescriptionLocalizations({
+          'nl': 'Stel het ticketsysteem in',
+          'fr': 'Configurer le système de tickets',
+          'hi': 'टिकट सिस्टम सेट अप करें'
+        })
+        .addRoleOption(opt => opt.setName('staff_role').setDescription('Role that can see and manage tickets').setDescriptionLocalizations({ 'nl': 'Rol die tickets kan zien en beheren', 'fr': 'Rôle pouvant voir et gérer les tickets', 'hi': 'वह भूमिका जो टिकट देख और प्रबंधित कर सकती है' }).setRequired(true))
+        .addChannelOption(opt => opt.setName('transcript_channel').setDescription('Channel to save ticket transcripts').setDescriptionLocalizations({ 'nl': 'Kanaal om tickettranscripties op te slaan', 'fr': 'Canal pour enregistrer les transcriptions de tickets', 'hi': 'टिकट ट्रांसक्रिप्ट सहेजने के लिए चैनल' }).setRequired(true))
+        .addChannelOption(opt => opt.setName('category').setDescription('Discord category to create ticket channels in').setDescriptionLocalizations({ 'nl': 'Discord-categorie om ticketkanalen in aan te maken', 'fr': 'Catégorie Discord pour créer les canaux de tickets', 'hi': 'टिकट चैनल बनाने के लिए डिस्कॉर्ड श्रेणी' }).setRequired(false))
     )
     .addSubcommand(sub =>
       sub.setName('types')
         .setDescription('Set up to 5 ticket categories shown as buttons on the panel')
-        .addStringOption(opt => opt.setName('type1').setDescription('e.g. 🎫 General Support').setRequired(true))
-        .addStringOption(opt => opt.setName('type2').setDescription('e.g. 🛒 Shop Support').setRequired(false))
-        .addStringOption(opt => opt.setName('type3').setDescription('Category 3').setRequired(false))
-        .addStringOption(opt => opt.setName('type4').setDescription('Category 4').setRequired(false))
-        .addStringOption(opt => opt.setName('type5').setDescription('Category 5').setRequired(false))
+        .setDescriptionLocalizations({
+          'nl': 'Stel maximaal 5 ticketcategorieën in als knoppen op het paneel',
+          'fr': 'Configurer jusqu\'à 5 catégories de tickets affichées sous forme de boutons',
+          'hi': 'पैनल पर बटन के रूप में दिखाई देने वाली अधिकतम 5 टिकट श्रेणियां सेट करें'
+        })
+        .addStringOption(opt => opt.setName('type1').setDescription('e.g. 🎫 General Support').setDescriptionLocalizations({ 'nl': 'bijv. 🎫 Algemene Ondersteuning', 'fr': 'ex. 🎫 Support Général', 'hi': 'उदा. 🎫 सामान्य सहायता' }).setRequired(true))
+        .addStringOption(opt => opt.setName('type2').setDescription('e.g. 🛒 Shop Support').setDescriptionLocalizations({ 'nl': 'bijv. 🛒 Winkel Ondersteuning', 'fr': 'ex. 🎫 Support Boutique', 'hi': 'उदा. 🛒 दुकान सहायता' }).setRequired(false))
+        .addStringOption(opt => opt.setName('type3').setDescription('Category 3').setDescriptionLocalizations({ 'nl': 'Categorie 3', 'fr': 'Catégorie 3', 'hi': 'श्रेणी 3' }).setRequired(false))
+        .addStringOption(opt => opt.setName('type4').setDescription('Category 4').setDescriptionLocalizations({ 'nl': 'Categorie 4', 'fr': 'Catégorie 4', 'hi': 'श्रेणी 4' }).setRequired(false))
+        .addStringOption(opt => opt.setName('type5').setDescription('Category 5').setDescriptionLocalizations({ 'nl': 'Categorie 5', 'fr': 'Catégorie 5', 'hi': 'श्रेणी 5' }).setRequired(false))
     )
     .addSubcommand(sub =>
       sub.setName('panel')
         .setDescription('Send the ticket panel with category buttons to a channel')
-        .addChannelOption(opt => opt.setName('channel').setDescription('Channel to send the panel in').setRequired(true))
-        .addStringOption(opt => opt.setName('message').setDescription('Custom message on the panel').setRequired(false))
+        .setDescriptionLocalizations({
+          'nl': 'Verstuur het ticketpaneel met categorieknoppen naar een kanaal',
+          'fr': 'Envoyer le panneau de tickets avec les boutons de catégorie dans un canal',
+          'hi': 'श्रेणी बटन के साथ टिकट पैनल किसी चैनल में भेजें'
+        })
+        .addChannelOption(opt => opt.setName('channel').setDescription('Channel to send the panel in').setDescriptionLocalizations({ 'nl': 'Kanaal om het paneel naar te verzenden', 'fr': 'Canal où envoyer le panneau', 'hi': 'पैनल भेजने के लिए चैनल' }).setRequired(true))
+        .addStringOption(opt => opt.setName('message').setDescription('Custom message on the panel').setDescriptionLocalizations({ 'nl': 'Aangepast bericht op het paneel', 'fr': 'Message personnalisé sur le panneau', 'hi': 'पैनल पर कस्टम संदेश' }).setRequired(false))
     )
-    .addSubcommand(sub => sub.setName('close').setDescription('Close the current ticket'))
-    .addSubcommand(sub => sub.setName('claim').setDescription('Claim this ticket as your responsibility'))
-    .addSubcommand(sub => sub.setName('unclaim').setDescription('Unclaim this ticket'))
+    .addSubcommand(sub => sub.setName('close').setDescription('Close the current ticket').setDescriptionLocalizations({ 'nl': 'Sluit het huidige ticket', 'fr': 'Fermer le ticket actuel', 'hi': 'वर्तमान टिकट बंद करें' }))
+    .addSubcommand(sub => sub.setName('claim').setDescription('Claim this ticket as your responsibility').setDescriptionLocalizations({ 'nl': 'Claim dit ticket als jouw verantwoordelijkheid', 'fr': 'Revendiquer ce ticket comme votre responsabilité', 'hi': 'इस टिकट को अपनी ज़िम्मेदारी के रूप में दावा करें' }))
+    .addSubcommand(sub => sub.setName('unclaim').setDescription('Unclaim this ticket').setDescriptionLocalizations({ 'nl': 'Claim van dit ticket intrekken', 'fr': 'Retirer la revendication de ce ticket', 'hi': 'इस टिकट का दावा छोड़ें' }))
     .addSubcommand(sub =>
       sub.setName('add')
         .setDescription('Add a user to the current ticket')
-        .addUserOption(opt => opt.setName('user').setDescription('User to add').setRequired(true))
+        .setDescriptionLocalizations({
+          'nl': 'Voeg een gebruiker toe aan het huidige ticket',
+          'fr': 'Ajouter un utilisateur au ticket actuel',
+          'hi': 'वर्तमान टिकट में एक उपयोगकर्ता जोड़ें'
+        })
+        .addUserOption(opt => opt.setName('user').setDescription('User to add').setDescriptionLocalizations({ 'nl': 'Toe te voegen gebruiker', 'fr': 'Utilisateur à ajouter', 'hi': 'जोड़ने के लिए उपयोगकर्ता' }).setRequired(true))
     )
     .addSubcommand(sub =>
       sub.setName('remove')
         .setDescription('Remove a user from the current ticket')
-        .addUserOption(opt => opt.setName('user').setDescription('User to remove').setRequired(true))
+        .setDescriptionLocalizations({
+          'nl': 'Verwijder een gebruiker van het huidige ticket',
+          'fr': 'Retirer un utilisateur du ticket actuel',
+          'hi': 'वर्तमान टिकट से एक उपयोगकर्ता हटाएं'
+        })
+        .addUserOption(opt => opt.setName('user').setDescription('User to remove').setDescriptionLocalizations({ 'nl': 'Te verwijderen gebruiker', 'fr': 'Utilisateur à retirer', 'hi': 'हटाने के लिए उपयोगकर्ता' }).setRequired(true))
     )
     .addSubcommand(sub =>
       sub.setName('ratingban')
         .setDescription('Remove a user\'s right to give star ratings')
-        .addUserOption(opt => opt.setName('user').setDescription('User to ban from rating').setRequired(true))
+        .setDescriptionLocalizations({
+          'nl': 'Ontneem een gebruiker het recht om sterrating te geven',
+          'fr': 'Retirer le droit d\'un utilisateur de donner des notes par étoiles',
+          'hi': 'स्टार रेटिंग देने का उपयोगकर्ता का अधिकार हटाएं'
+        })
+        .addUserOption(opt => opt.setName('user').setDescription('User to ban from rating').setDescriptionLocalizations({ 'nl': 'Gebruiker om te weren van beoordelingen', 'fr': 'Utilisateur à bannir des notes', 'hi': 'रेटिंग से प्रतिबंधित करने के लिए उपयोगकर्ता' }).setRequired(true))
     )
     .addSubcommand(sub =>
       sub.setName('ratingunban')
         .setDescription('Restore a user\'s right to give star ratings')
-        .addUserOption(opt => opt.setName('user').setDescription('User to restore').setRequired(true))
+        .setDescriptionLocalizations({
+          'nl': 'Herstel het recht van een gebruiker om sterrating te geven',
+          'fr': 'Restaurer le droit d\'un utilisateur de donner des notes par étoiles',
+          'hi': 'स्टार रेटिंग देने का उपयोगकर्ता का अधिकार बहाल करें'
+        })
+        .addUserOption(opt => opt.setName('user').setDescription('User to restore').setDescriptionLocalizations({ 'nl': 'Te herstellen gebruiker', 'fr': 'Utilisateur à restaurer', 'hi': 'बहाल करने के लिए उपयोगकर्ता' }).setRequired(true))
     )
     .addSubcommand(sub =>
       sub.setName('ratings')
         .setDescription('View star rating stats for a staff member')
-        .addUserOption(opt => opt.setName('staff').setDescription('Staff member to check').setRequired(true))
+        .setDescriptionLocalizations({
+          'nl': 'Bekijk sterratingstatistieken voor een staflid',
+          'fr': 'Afficher les statistiques de notation par étoiles d\'un membre du personnel',
+          'hi': 'स्टाफ सदस्य के लिए स्टार रेटिंग आँकड़े देखें'
+        })
+        .addUserOption(opt => opt.setName('staff').setDescription('Staff member to check').setDescriptionLocalizations({ 'nl': 'Te controleren staflid', 'fr': 'Membre du personnel à vérifier', 'hi': 'जाँच करने के लिए स्टाफ सदस्य' }).setRequired(true))
     ),
 
   async execute(interaction, client) {
@@ -584,52 +629,54 @@ module.exports = {
       const cleanType = ticketType.replace(/[^\w\s]/gi, '').trim().toLowerCase().replace(/\s+/g, '-').slice(0, 15) || 'ticket';
       const cleanUser = user.username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15);
 
-      const channelOptions = {
-        name: `🎫・${cleanUser}-${cleanType}`,
-        type: ChannelType.GuildText,
-        topic: `Ticket opened by ${user.tag} | Category: ${ticketType}`,
-        permissionOverwrites: [
-          { id: guild.id, deny: ['ViewChannel'] },
-          { id: user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles'] },
-        ]
-      };
-      if (config.staff_role_id) {
-        channelOptions.permissionOverwrites.push({ id: config.staff_role_id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages', 'AttachFiles'] });
-      }
-      if (config.category_id) channelOptions.parent = config.category_id;
-
       let ticketChannel;
-      try { ticketChannel = await guild.channels.create(channelOptions); }
-      catch (err) { return interaction.reply({ content: t(lang, 'ticket_create_failed'), flags: 64 }); }
+      try {
+        ticketChannel = await guild.channels.create({
+          name: `${cleanType}-${cleanUser}`,
+          type: ChannelType.GuildText,
+          parent: config.category_id || null,
+          permissionOverwrites: [
+            { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+            { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+            { id: config.staff_role_id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] }
+          ]
+        });
+      } catch (err) {
+        console.error('Failed to create ticket channel:', err.message);
+        return interaction.reply({ content: t(lang, 'ticket_create_error'), flags: 64 });
+      }
 
-      await pool.query(`INSERT INTO tickets (guild_id, channel_id, user_id, ticket_type) VALUES ($1,$2,$3,$4)`, [guildId, ticketChannel.id, user.id, ticketType]);
+      const { rows: newTicket } = await pool.query(
+        `INSERT INTO tickets (guild_id, channel_id, user_id, ticket_type, status) VALUES ($1, $2, $3, $4, 'open') RETURNING id`,
+        [guildId, ticketChannel.id, user.id, ticketType]
+      );
+      const ticketId = newTicket[0].id;
 
-      const closeRow = new ActionRowBuilder().addComponents(
+      const welcomeEmbed = new EmbedBuilder()
+        .setTitle(`🎫 ${t(lang, 'ticket_welcome_title', { type: ticketType })}`)
+        .setColor(0x5865f2)
+        .setDescription(t(lang, 'ticket_welcome_desc', { user: user.id }))
+        .addFields({ name: `📂 ${t(lang, 'ticket_type')}`, value: ticketType })
+        .setTimestamp();
+
+      const controlRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`ticket_close_btn_${ticketChannel.id}`).setLabel(t(lang, 'ticket_btn_close')).setEmoji('🔒').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`ticket_claim_btn_${ticketChannel.id}`).setLabel(t(lang, 'ticket_btn_claim')).setEmoji('🛡️').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`ticket_claim_btn_${ticketChannel.id}`).setLabel(t(lang, 'ticket_btn_claim')).setEmoji('🛡️').setStyle(ButtonStyle.Secondary)
       );
 
       await ticketChannel.send({
-        content: `<@${user.id}>${config.staff_role_id ? ` <@&${config.staff_role_id}>` : ''}`,
-        embeds: [new EmbedBuilder()
-          .setTitle(`🎫 ${t(lang, 'ticket_support_title')}`)
-          .setColor(0x5865f2)
-          .setDescription(t(lang, 'ticket_welcome', { user: user.id }))
-          .addFields(
-            { name: `👤 ${t(lang, 'ticket_opened_by')}`, value: `<@${user.id}>`, inline: true },
-            { name: `📂 ${t(lang, 'ticket_category')}`, value: ticketType, inline: true },
-            { name: `🛡️ ${t(lang, 'ticket_status')}`, value: `🔴 ${t(lang, 'ticket_unclaimed')}`, inline: true },
-          )
-          .setThumbnail(user.displayAvatarURL({ extension: 'png', size: 256 }))
-          .setFooter({ text: t(lang, 'ticket_mod_claim') })],
-        components: [closeRow]
+        content: `<@&${config.staff_role_id}> <@${user.id}>`,
+        embeds: [welcomeEmbed],
+        components: [controlRow]
       });
 
       return interaction.reply({ content: t(lang, 'ticket_created_success', { channel: ticketChannel.id }), flags: 64 });
     }
+  },
 
-    // ── RATING REASON MODAL SUBMIT ────────────────────────────────────────────
-    if (interaction.isModalSubmit() && interaction.customId.startsWith('ticket_rate_reason_')) {
+  async handleModal(interaction, client) {
+    const lang = await getGuildLang(interaction.guildId);
+    if (interaction.customId.startsWith('ticket_rate_reason_')) {
       const parts = interaction.customId.split('_');
       const ticketId = parseInt(parts[3]);
       const rating = parseInt(parts[4]);
@@ -651,11 +698,12 @@ module.exports = {
       }
 
       const stars = '⭐'.repeat(rating);
-      return interaction.reply({
+      await interaction.update({
         embeds: [new EmbedBuilder()
           .setTitle(`⭐ ${t(lang, 'ticket_rate_thanks_title')}`)
-          .setColor(0xe74c3c)
-          .setDescription(t(lang, 'ticket_rate_reason_logged', { stars, rating }))]
+          .setColor(0x2ecc71)
+          .setDescription(t(lang, 'ticket_rate_thanks_desc_reason', { stars, rating, reason }))],
+        components: []
       });
     }
   }

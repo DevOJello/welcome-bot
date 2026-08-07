@@ -10,33 +10,63 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('hangrygames')
     .setDescription('Play Oscars Hangry Games!')
+    .setDescriptionLocalizations({
+      'nl': 'Speel Oscars Hangry Games!',
+      'fr': 'Jouez aux Hangry Games d\'Oscar !',
+      'hi': 'ऑस्कर के Hangry Games खेलें!'
+    })
     .addSubcommand(sub =>
       sub.setName('new')
         .setDescription('Start a new round of Hangry Games')
-        .addStringOption(opt => opt.setName('prize').setDescription('The prize for this round (optional)'))
-        .addUserOption(opt => opt.setName('sponsor').setDescription('Sponsor of this round (optional)'))
+        .setDescriptionLocalizations({
+          'nl': 'Start een nieuwe ronde van Hangry Games',
+          'fr': 'Démarrer une nouvelle partie de Hangry Games',
+          'hi': 'Hangry Games का एक नया दौर शुरू करें'
+        })
+        .addStringOption(opt => opt.setName('prize').setDescription('The prize for this round (optional)').setDescriptionLocalizations({ 'nl': 'De prijs voor deze ronde (optioneel)', 'fr': 'Le prix pour cette manche (optionnel)', 'hi': 'इस दौर के लिए पुरस्कार (वैकल्पिक)' }))
+        .addUserOption(opt => opt.setName('sponsor').setDescription('Sponsor of this round (optional)').setDescriptionLocalizations({ 'nl': 'Sponsor van deze ronde (optioneel)', 'fr': 'Sponsor de cette manche (optionnel)', 'hi': 'इस दौर के प्रायोजक (वैकल्पिक)' }))
     )
     .addSubcommand(sub =>
       sub.setName('giveaway')
         .setDescription('Start a Hangry Games giveaway with a custom prize')
-        .addStringOption(opt => opt.setName('prize').setDescription('The prize for this giveaway').setRequired(true))
-        .addUserOption(opt => opt.setName('sponsor').setDescription('Sponsor of the prize'))
+        .setDescriptionLocalizations({
+          'nl': 'Start een Hangry Games giveaway met een eigen prijs',
+          'fr': 'Lancer un concours Hangry Games avec un prix personnalisé',
+          'hi': 'एक कस्टम पुरस्कार के साथ Hangry Games giveaway शुरू करें'
+        })
+        .addStringOption(opt => opt.setName('prize').setDescription('The prize for this giveaway').setDescriptionLocalizations({ 'nl': 'De prijs voor deze giveaway', 'fr': 'Le prix de ce concours', 'hi': 'इस giveaway के लिए पुरस्कार' }).setRequired(true))
+        .addUserOption(opt => opt.setName('sponsor').setDescription('Sponsor of the prize').setDescriptionLocalizations({ 'nl': 'Sponsor van de prijs', 'fr': 'Sponsor du prix', 'hi': 'पुरस्कार के प्रायोजक' }))
     )
     .addSubcommand(sub =>
       sub.setName('role')
         .setDescription('Immediately start a Hangry Games with everyone in a specific role')
-        .addRoleOption(opt => opt.setName('role').setDescription('The role to pull players from').setRequired(true))
-        .addStringOption(opt => opt.setName('prize').setDescription('The prize for this round (optional)'))
-        .addUserOption(opt => opt.setName('sponsor').setDescription('Sponsor of this round (optional)'))
+        .setDescriptionLocalizations({
+          'nl': 'Start direct een Hangry Games met iedereen in een specifieke rol',
+          'fr': 'Démarrer immédiatement un Hangry Games avec tout le monde dans un rôle spécifique',
+          'hi': 'एक विशिष्ट भूमिका में सभी के साथ तुरंत Hangry Games शुरू करें'
+        })
+        .addRoleOption(opt => opt.setName('role').setDescription('The role to pull players from').setDescriptionLocalizations({ 'nl': 'De rol om spelers uit te halen', 'fr': 'Le rôle pour sélectionner les joueurs', 'hi': 'खिलाड़ियों को चुनने के लिए भूमिका' }).setRequired(true))
+        .addStringOption(opt => opt.setName('prize').setDescription('The prize for this round (optional)').setDescriptionLocalizations({ 'nl': 'De prijs voor deze ronde (optioneel)', 'fr': 'Le prix pour cette manche (optionnel)', 'hi': 'इस दौर के लिए पुरस्कार (वैकल्पिक)' }))
+        .addUserOption(opt => opt.setName('sponsor').setDescription('Sponsor of this round (optional)').setDescriptionLocalizations({ 'nl': 'Sponsor van deze ronde (optioneel)', 'fr': 'Sponsor de cette manche (optionnel)', 'hi': 'इस दौर के प्रायोजक (वैकल्पिक)' }))
     )
     .addSubcommand(sub =>
       sub.setName('balance')
         .setDescription('Check your current balance of Hangry Coins')
-        .addUserOption(opt => opt.setName('user').setDescription('The user whose balance you want to check (optional)'))
+        .setDescriptionLocalizations({
+          'nl': 'Controleer je huidige saldo aan Hangry Coins',
+          'fr': 'Vérifiez votre solde actuel de Hangry Coins',
+          'hi': 'अपने Hangry Coins का वर्तमान संतुलन जांचें'
+        })
+        .addUserOption(opt => opt.setName('user').setDescription('The user whose balance you want to check (optional)').setDescriptionLocalizations({ 'nl': 'De gebruiker wiens saldo je wilt controleren (optioneel)', 'fr': 'L\'utilisateur dont vous voulez vérifier le solde (optionnel)', 'hi': 'वह उपयोगकर्ता जिसका संतुलन आप देखना चाहते हैं (वैकल्पिक)' }))
     )
     .addSubcommand(sub =>
       sub.setName('cancel')
         .setDescription('Cancel the current active Hangry Games on this server')
+        .setDescriptionLocalizations({
+          'nl': 'Annuleer de huidige actieve Hangry Games op deze server',
+          'fr': 'Annuler les Hangry Games actifs sur ce serveur',
+          'hi': 'इस सर्वर पर वर्तमान सक्रिय Hangry Games रद्द करें'
+        })
     ),
 
   async execute(interaction, client) {
@@ -52,7 +82,8 @@ module.exports = {
           .setTitle(t(lang, 'hg_vault_title'))
           .setColor(0xFEE75C)
           .setDescription(t(lang, 'hg_vault_desc', { user: targetUser.id, balance }))
-          .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))]
+          .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))],
+        flags: 64
       });
     }
 

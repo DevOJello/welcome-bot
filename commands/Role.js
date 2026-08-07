@@ -14,17 +14,32 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('role')
     .setDescription('Add or remove a role from a member')
+    .setDescriptionLocalizations({
+      'nl': 'Voeg een rol toe aan een lid of verwijder deze',
+      'fr': 'Ajouter ou supprimer un rôle d\'un membre',
+      'hi': 'किसी सदस्य से भूमिका जोड़ें या हटाएं'
+    })
     .addSubcommand(sub =>
       sub.setName('add')
         .setDescription('Add a role to a member')
-        .addUserOption(opt => opt.setName('member').setDescription('Member to give the role to').setRequired(true))
-        .addRoleOption(opt => opt.setName('role').setDescription('Role to give').setRequired(true))
+        .setDescriptionLocalizations({
+          'nl': 'Voeg een rol toe aan een lid',
+          'fr': 'Ajouter un rôle à un membre',
+          'hi': 'किसी सदस्य को भूमिका दें'
+        })
+        .addUserOption(opt => opt.setName('member').setDescription('Member to give the role to').setDescriptionLocalizations({ 'nl': 'Lid om de rol aan te geven', 'fr': 'Membre à qui donner le rôle', 'hi': 'भूमिका देने के लिए सदस्य' }).setRequired(true))
+        .addRoleOption(opt => opt.setName('role').setDescription('Role to give').setDescriptionLocalizations({ 'nl': 'Te geven rol', 'fr': 'Rôle à donner', 'hi': 'देने के लिए भूमिका' }).setRequired(true))
     )
     .addSubcommand(sub =>
       sub.setName('remove')
         .setDescription('Remove a role from a member')
-        .addUserOption(opt => opt.setName('member').setDescription('Member to remove the role from').setRequired(true))
-        .addRoleOption(opt => opt.setName('role').setDescription('Role to remove').setRequired(true))
+        .setDescriptionLocalizations({
+          'nl': 'Verwijder een rol van een lid',
+          'fr': 'Supprimer un rôle d\'un membre',
+          'hi': 'किसी सदस्य से भूमिका हटाएं'
+        })
+        .addUserOption(opt => opt.setName('member').setDescription('Member to remove the role from').setDescriptionLocalizations({ 'nl': 'Lid om de rol van te verwijderen', 'fr': 'Membre à qui retirer le rôle', 'hi': 'किस सदस्य से भूमिका हटानी है' }).setRequired(true))
+        .addRoleOption(opt => opt.setName('role').setDescription('Role to remove').setDescriptionLocalizations({ 'nl': 'Te verwijderen rol', 'fr': 'Rôle à retirer', 'hi': 'हटाने के लिए भूमिका' }).setRequired(true))
     ),
 
   async execute(interaction, client) {

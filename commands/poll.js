@@ -9,9 +9,19 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('poll')
     .setDescription('Start a poll in the channel')
+    .setDescriptionLocalizations({
+      'nl': 'Start een peiling in het kanaal',
+      'fr': 'Démarrer un sondage dans le canal',
+      'hi': 'चैनल में एक पोल शुरू करें'
+    })
     .addStringOption(option =>
       option.setName('question')
         .setDescription('The question you want people to vote on')
+        .setDescriptionLocalizations({
+          'nl': 'De vraag waar mensen op moeten stemmen',
+          'fr': 'La question sur laquelle vous voulez que les gens votent',
+          'hi': 'वह प्रश्न जिस पर आप चाहते हैं कि लोग वोट करें'
+        })
         .setRequired(true)),
 
   async execute(interaction) {

@@ -6,17 +6,37 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('ban')
     .setDescription('Permanently ban a user from the server')
+    .setDescriptionLocalizations({
+      'nl': 'Verban een gebruiker permanent van de server',
+      'fr': 'Bannir définitivement un utilisateur du serveur',
+      'hi': 'सर्वर से किसी उपयोगकर्ता को स्थायी रूप से प्रतिबंधित करें'
+    })
     .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
     .addUserOption(option =>
       option.setName('target')
         .setDescription('The user to ban')
+        .setDescriptionLocalizations({
+          'nl': 'De te verbannen gebruiker',
+          'fr': 'L\'utilisateur à bannir',
+          'hi': 'प्रतिबंध लगाने के लिए उपयोगकर्ता'
+        })
         .setRequired(true))
     .addStringOption(option =>
       option.setName('reason')
-        .setDescription('Reason for the ban'))
+        .setDescription('Reason for the ban')
+        .setDescriptionLocalizations({
+          'nl': 'Reden voor de ban',
+          'fr': 'Raison du bannissement',
+          'hi': 'प्रतिबंध का कारण'
+        }))
     .addIntegerOption(option =>
       option.setName('delete_days')
         .setDescription('Number of days of messages to delete (0-7)')
+        .setDescriptionLocalizations({
+          'nl': 'Aantal dagen aan berichten om te verwijderen (0-7)',
+          'fr': 'Nombre de jours de messages à supprimer (0-7)',
+          'hi': 'हटाए जाने वाले संदेशों के दिनों की संख्या (0-7)'
+        })
         .setMinValue(0)
         .setMaxValue(7)),
 

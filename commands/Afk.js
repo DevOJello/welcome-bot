@@ -8,15 +8,20 @@ const afkUsers = new Map();
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('afk')
-    .setDescription('Set your AFK status / Stel je AFK status in')
+    .setDescription('Set your AFK status')
     .setDescriptionLocalizations({
       'nl': 'Stel je AFK-status in',
-      'en-US': 'Set your AFK status',
-      'en-GB': 'Set your AFK status'
+      'fr': 'Définir votre statut AFK',
+      'hi': 'अपनी एएफके स्थिति सेट करें'
     })
     .addStringOption(opt =>
       opt.setName('reason')
-        .setDescription('Reason for being AFK / Reden voor AFK')
+        .setDescription('Reason for being AFK')
+        .setDescriptionLocalizations({
+          'nl': 'Reden voor AFK',
+          'fr': 'Raison de l\'absence',
+          'hi': 'एएफके होने का कारण'
+        })
         .setRequired(false)
     ),
 

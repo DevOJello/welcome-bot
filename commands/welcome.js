@@ -20,24 +20,44 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('welcome')
     .setDescription('Configure the welcome system')
+    .setDescriptionLocalizations({
+      'nl': 'Configureer het welkomstssysteem',
+      'fr': 'Configurer le système de bienvenue',
+      'hi': 'स्वागत प्रणाली कॉन्फ़िगर करें'
+    })
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
 
     .addSubcommand(sub =>
       sub.setName('setup')
         .setDescription('Set up the welcome system for this server')
-        .addChannelOption(opt => opt.setName('channel').setDescription('Channel to send welcome messages in').setRequired(true))
-        .addRoleOption(opt => opt.setName('role').setDescription('Role to give new members automatically').setRequired(true))
-        .addStringOption(opt => opt.setName('dm').setDescription('DM message sent to new members (use {user} for their name)').setRequired(false))
+        .setDescriptionLocalizations({
+          'nl': 'Stel het welkomstssysteem in voor deze server',
+          'fr': 'Configurer le système de bienvenue pour ce serveur',
+          'hi': 'इस सर्वर के लिए स्वागत प्रणाली सेट अप करें'
+        })
+        .addChannelOption(opt => opt.setName('channel').setDescription('Channel to send welcome messages in').setDescriptionLocalizations({ 'nl': 'Kanaal om welkomstberichten in te sturen', 'fr': 'Canal pour envoyer les messages de bienvenue', 'hi': 'स्वागत संदेश भेजने के लिए चैनल' }).setRequired(true))
+        .addRoleOption(opt => opt.setName('role').setDescription('Role to give new members automatically').setDescriptionLocalizations({ 'nl': 'Rol om automatisch aan nieuwe leden te geven', 'fr': 'Rôle à donner automatiquement aux nouveaux membres', 'hi': 'नए सदस्यों को स्वचालित रूप से देने के लिए भूमिका' }).setRequired(true))
+        .addStringOption(opt => opt.setName('dm').setDescription('DM message sent to new members (use {user} for their name)').setDescriptionLocalizations({ 'nl': 'DM-bericht verzonden naar nieuwe leden (gebruik {user} voor hun naam)', 'fr': 'Message privé envoyé aux nouveaux membres (utilisez {user} pour leur nom)', 'hi': 'नए सदस्यों को भेजा गया डीएम संदेश (उनके नाम के लिए {user} का उपयोग करें)' }).setRequired(false))
     )
 
     .addSubcommand(sub =>
       sub.setName('config')
         .setDescription('View the current welcome configuration')
+        .setDescriptionLocalizations({
+          'nl': 'Bekijk de huidige welkomstconfiguratie',
+          'fr': 'Afficher la configuration actuelle de bienvenue',
+          'hi': 'वर्तमान स्वागत कॉन्फ़िगरेशन देखें'
+        })
     )
 
     .addSubcommand(sub =>
       sub.setName('test')
         .setDescription('Test the welcome message with your own account')
+        .setDescriptionLocalizations({
+          'nl': 'Test het welkomstbericht met je eigen account',
+          'fr': 'Tester le message de bienvenue avec votre propre compte',
+          'hi': 'अपने खुद के खाते के साथ स्वागत संदेश का परीक्षण करें'
+        })
     ),
 
   async execute(interaction, client) {

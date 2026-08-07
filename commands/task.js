@@ -19,19 +19,39 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('task')
         .setDescription('Manage staff assignments and duties.')
+        .setDescriptionLocalizations({
+          'nl': 'Beheer staftaken en opdrachten.',
+          'fr': 'Gérer les attributions et les tâches du personnel.',
+          'hi': 'स्टाफ असाइनमेंट और कर्तव्यों का प्रबंधन करें।'
+        })
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
         .addSubcommand(sub => sub
             .setName('assign')
             .setDescription('Assign a new duty to a staff member.')
-            .addUserOption(opt => opt.setName('staff').setDescription('The moderator').setRequired(true))
-            .addStringOption(opt => opt.setName('duty').setDescription('What needs to be done?').setRequired(true)))
+            .setDescriptionLocalizations({
+              'nl': 'Wijs een nieuwe taak toe aan een staflid.',
+              'fr': 'Attribuer une nouvelle tâche à un membre du personnel.',
+              'hi': 'स्टाफ सदस्य को नया कर्तव्य सौंपें।'
+            })
+            .addUserOption(opt => opt.setName('staff').setDescription('The moderator').setDescriptionLocalizations({ 'nl': 'De moderator', 'fr': 'Le modérateur', 'hi': 'मॉडरेटर' }).setRequired(true))
+            .addStringOption(opt => opt.setName('duty').setDescription('What needs to be done?').setDescriptionLocalizations({ 'nl': 'Wat moet er gebeuren?', 'fr': 'Que faut-il faire ?', 'hi': 'क्या करने की आवश्यकता है?' }).setRequired(true)))
         .addSubcommand(sub => sub
             .setName('list')
-            .setDescription('List all active server tasks.'))
+            .setDescription('List all active server tasks.')
+            .setDescriptionLocalizations({
+              'nl': 'Toon alle actieve servertaken.',
+              'fr': 'Lister toutes les tâches actives du serveur.',
+              'hi': 'सभी सक्रिय सर्वर कार्य सूचीबद्ध करें।'
+            }))
         .addSubcommand(sub => sub
             .setName('complete')
             .setDescription('Mark a task assigned to you as completed.')
-            .addStringOption(opt => opt.setName('id').setDescription('The unique Task ID').setRequired(true))),
+            .setDescriptionLocalizations({
+              'nl': 'Markeer een aan jou toegewezen taak als voltooid.',
+              'fr': 'Marquer une tâche qui vous est attribuée comme terminée.',
+              'hi': 'आपको सौंपे गए कार्य को पूर्ण के रूप में चिह्नित करें।'
+            })
+            .addStringOption(opt => opt.setName('id').setDescription('The unique Task ID').setDescriptionLocalizations({ 'nl': 'De unieke taak-ID', 'fr': 'L\'identifiant unique de la tâche', 'hi': 'अद्वितीय कार्य आईडी' }).setRequired(true))),
 
     async execute(interaction) {
         const lang = await getGuildLang(interaction.guildId);

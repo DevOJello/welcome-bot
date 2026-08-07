@@ -6,14 +6,29 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('softban')
     .setDescription('Ban and immediately unban a user to clear their recent messages')
+    .setDescriptionLocalizations({
+      'nl': 'Verbied een gebruiker en heb direct de ban opgeheven om recente berichten te wissen',
+      'fr': 'Bannir et débannir immédiatement un utilisateur pour effacer ses messages récents',
+      'hi': 'हाल के संदेशों को साफ़ करने के लिए किसी उपयोगकर्ता को प्रतिबंधित करें और तुरंत अनबैन करें'
+    })
     .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
     .addUserOption(option =>
       option.setName('target')
         .setDescription('The user to softban')
+        .setDescriptionLocalizations({
+          'nl': 'De te softbannen gebruiker',
+          'fr': 'L\'utilisateur à softban',
+          'hi': 'सॉफ्टबैन करने के लिए उपयोगकर्ता'
+        })
         .setRequired(true))
     .addStringOption(option =>
       option.setName('reason')
-        .setDescription('Reason for the softban')),
+        .setDescription('Reason for the softban')
+        .setDescriptionLocalizations({
+          'nl': 'Reden voor de softban',
+          'fr': 'Raison du softban',
+          'hi': 'सॉफ्टबैन का कारण'
+        })),
 
   async execute(interaction) {
     const lang = await getGuildLang(interaction.guildId);
@@ -23,7 +38,7 @@ module.exports = {
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
 
     if (member && !member.bannable) {
-      return interaction.reply({ content: t(lang, 'cannot_ban_user'), ephemeral: true });
+      return interaction.reply({ content: t(lang, 'cannot_ban_user'), flags: 64 });
     }
 
     await interaction.guild.members.ban(target, { 

@@ -7,11 +7,21 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('setlog')
     .setDescription('Set the logging channel for server events')
+    .setDescriptionLocalizations({
+      'nl': 'Stel het logkanaal in voor server-evenementen',
+      'fr': 'Définir le canal de journalisation pour les événements du serveur',
+      'hi': 'सर्वर इवेंट्स के लिए लॉगिंग चैनल सेट करें'
+    })
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addChannelOption(option =>
       option
         .setName('channel')
         .setDescription('The text channel where logs should be sent')
+        .setDescriptionLocalizations({
+          'nl': 'Het tekstkanaal waar logs naar verzonden moeten worden',
+          'fr': 'Le canal textuel où les journaux doivent être envoyés',
+          'hi': 'वह टेक्स्ट चैनल जहाँ लॉग भेजे जाने चाहिए'
+        })
         .addChannelTypes(ChannelType.GuildText)
         .setRequired(true)
     ),

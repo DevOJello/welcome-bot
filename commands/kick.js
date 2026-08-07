@@ -6,14 +6,29 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('kick')
     .setDescription('Kick a user from the server')
+    .setDescriptionLocalizations({
+      'nl': 'Verwijder een gebruiker van de server',
+      'fr': 'Expulser un utilisateur du serveur',
+      'hi': 'सर्वर से किसी उपयोगकर्ता को निकालें'
+    })
     .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
     .addUserOption(option =>
       option.setName('target')
         .setDescription('The user to kick')
+        .setDescriptionLocalizations({
+          'nl': 'De te kicken gebruiker',
+          'fr': 'L\'utilisateur à expulser',
+          'hi': 'कick करने के लिए उपयोगकर्ता'
+        })
         .setRequired(true))
     .addStringOption(option =>
       option.setName('reason')
-        .setDescription('Reason for the kick')),
+        .setDescription('Reason for the kick')
+        .setDescriptionLocalizations({
+          'nl': 'Reden voor de kick',
+          'fr': 'Raison de l\'expulsion',
+          'hi': 'कick करने का कारण'
+        })),
 
   async execute(interaction) {
     const lang = await getGuildLang(interaction.guildId);

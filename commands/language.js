@@ -5,17 +5,18 @@ const { t } = require('../locales');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('language')
-    .setDescription('Change bot language / Verander de taal van de bot / Changer la langue du bot')
+    .setDescription('Change bot language / Verander de taal / Changer la langue / भाषा बदलें')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addStringOption(option =>
       option
         .setName('lang')
-        .setDescription('Choose a language / Kies een taal / Choisissez une langue')
+        .setDescription('Choose a language / Kies een taal / Choisissez une langue / भाषा चुनें')
         .setRequired(true)
         .addChoices(
           { name: 'Nederlands 🇳🇱', value: 'nl' },
           { name: 'English 🇬🇧', value: 'en' },
-          { name: 'Français 🇫🇷', value: 'fr' }
+          { name: 'Français 🇫🇷', value: 'fr' },
+          { name: 'Hindi 🇮🇳', value: 'hi' }
         )
     ),
 
@@ -31,10 +32,11 @@ module.exports = {
       [guildId, lang]
     );
 
-    // Bepaal de juiste vertaalsleutel op basis van de gekozen taal
+    // Bepaal de juiste vertaalsleutel
     let key = 'lang_updated_en';
     if (lang === 'nl') key = 'lang_updated_nl';
     if (lang === 'fr') key = 'lang_updated_fr';
+    if (lang === 'hi') key = 'lang_updated_hi'; // <-- Deze vangt het Hindi op!
 
     return interaction.reply({ content: t(lang, key), flags: 64 });
   }
